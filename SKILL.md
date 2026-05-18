@@ -1,104 +1,51 @@
 ---
 name: code-to-business
-description: Use when the user wants to understand Java code in plain business terms. Primary usage is through OpenCode -- clone the repo and OpenCode reads AGENTS.md to run the pipeline. Reads Java source files, uses an internal LLM (OpenAI-compatible API) to explain business logic, and generates a self-contained HTML document with Mermaid sequence/flow diagrams. For e-commerce ops beginners who can read code repos but don't know Java.
-version: 1.1.0
+description: Use when the user wants to understand Java code in plain business terms. Works directly with OpenCode -- no external LLM config needed. Collector scans Java source files, OpenCode uses its own LLM to produce the 6-part business analysis, then aggregator + html_assembler generate a self-contained HTML document with Mermaid diagrams.
+version: 2.0.0
 author: Hermes Agent
 license: MIT
 metadata:
   hermes:
-    tags: [java, business-analysis, documentation, html, mermaid, e-commerce, opencode]
-    related_skills: [architecture-diagram, hermes-agent-skill-authoring, opencode]
+    tags: [java, business-analysis, documentation, html, mermaid, opencode]
+    related_skills: [architecture-diagram, opencode]
 ---
 
-# Java → 业务文档生成器（OpenCode 原生工具）
+# Java → 业务文档生成器（OpenCode 原生）
 
 ## 概述
 
-`code-to-business` 是一个完整的 pipeline，把 Java 代码仓翻译成小白能看懂的 HTML 业务文档，附带时序图和流程图。
+`code-to-business` 把 Java 代码仓翻译成非技术人员也能看懂的 HTML 业务文档，带 Mermaid 时序图和流程图。
 
-**设计定位：OpenCode 原生工具。** 仓库自带了 `AGENTS.md`，OpenCode 进入目录后自动加载，知道完整的五步管线怎么跑、config.yaml 怎么配、输出在哪里。在 OpenCode 里一句话就能触发：
+**v2.0 架构：不需要 config.yaml，不需要额外对接 LLM。** 管线变成：
 
 ```
-用 code-to-business 分析 /path/to/java-project，生成业务文档
+Java 源码 ──▶ collector.py ──▶ 💬 OpenCode LLM ──▶ aggregator.py ──▶ html_assembler.py
 ```
 
-**核心流程：**
-1. 收集 Java 文件，按功能簇分组（Controller + Service + Mapper + DTO）
-2. 每个功能簇发给公司内部 LLM，LLM 用中文解释业务逻辑
-3. 汇总结果，自动生成 Mermaid 时序图/流程图
-4. 组装成一个自包含的 HTML 文件，浏览器打开即看
-
-**安全红线：** 所有代码只能在公司内网流转。LLM API 地址必须指向公司内部地址，不能是公网服务。
+你的 OpenCode 已经配好了公司内网 LLM——用它直接做分析，脚本只负责收集、合并、组装 HTML。
 
 ## 何时使用
 
 - 「帮我分析一下这个 Java 项目的业务逻辑」
 - 「下单接口的完整链路是什么样的」
-- 「这个模块有哪些接口，每个接口做什么」
 - 「把这批代码翻译成运营能看懂的文档」
 - 在 OpenCode 中直接说「用 code-to-business 分析 xxx」
 
-**不要用于：**
-- 代码审查/性能分析（这不是该工具的目的）
-- 非 Java 项目
+**不要用于：** 代码审查/性能分析、非 Java 项目。
 
-## OpenCode 用法（推荐）
+## 在 OpenCode 中的用法
 
-### 初次使用
-
-```bash
-git clone https://github.com/kodak9527/code-to-business.git
-cd code-to-business
-cp config.example.yaml config.yaml
-# 编辑 config.yaml，填入公司内部 LLM 地址和密钥
-```
-
-然后对 OpenCode 说：
+Clone 到 OpenCode 工作目录后：
 
 ```
-用 code-to-business 分析 /path/to/your-java-project，生成业务文档
+用 code-to-business 分析 /path/to/java-project，生成业务文档
 ```
 
-OpenCode 会自动：
-1. 检查 config.yaml 是否配置好
-2. 跑五步管线（或指导你手动跑）
-3. 报告结果
-
-### 手动命令行
-
-```bash
-# 一键跑完
-python cli.py run --target /path/to/project --config config.yaml
-
-# 带完整性校验
-python cli.py run --target /path/to/project --config config.yaml --verify
-
-# 分步调试
-python cli.py step 1 --target /path/to/project    # 只收集
-python cli.py step 2 --config config.yaml          # 只 LLM 分析
-python cli.py step 3                                # 只聚合
-python cli.py step 4 --output 业务.html             # 只生成 HTML
-python cli.py step 5                                # 只验证
-```
-
-## 前置配置
-
-```bash
-cp config.example.yaml config.yaml
-vim config.yaml
-```
-
-配置内容：
-```yaml
-llm:
-  base_url: "http://your-internal-llm.company.com/v1"
-  api_key: "your-api-key"
-  model: "your-model-name"
-  max_tokens: 4096
-  temperature: 0.3
-```
-
-**警告：** base_url 必须是公司内网地址。不要填写任何公网 LLM 地址。
+OpenCode 自动读 `AGENTS.md`，按四步执行：
+1. 跑 `collector.py` 收集分组
+2. 用自己的 LLM + prompt 模板分析每个功能簇
+3. 跑 `build_jsonl.py` 合并结果
+4. 跑 `aggregator.py` + `html_assembler.py` 生成 HTML
 
 ## 两种分析模式
 
@@ -110,7 +57,7 @@ llm:
 用户: "分析 OrderController 的 createOrder 方法"
 ```
 
-输出：该接口的完整业务文档，包括每一步的调用时序、业务规则、异常处理。
+输出：该接口的完整业务文档，包含调用时序、业务规则、异常处理。
 
 ### 模式 B: 模块全景扫描
 
@@ -120,116 +67,73 @@ llm:
 用户: "分析 order 包下所有代码"
 ```
 
-输出：每个接口都有独立章节，侧边栏导航，可搜索。
+输出：每个接口独立章节，侧边栏导航，可搜索。
 
-## 工作流（OpenCode 视角）
+## 工作流详解
 
-当用户在 OpenCode 中说「用 code-to-business 分析 xxx」时：
-
-### Step 1: 确认目标
-
-明确分析范围：
-- 单个 Controller 文件 → 模式 A
-- 一个包/模块 → 模式 B
-- 整个项目 → 模式 B
-
-### Step 2: 配置检查
-
-读 config.yaml，确认 LLM 连接信息已填写。如果未配置，引导用户完成。
-
-### Step 3: 运行管线
+### Step 1: 收集（collector.py）
 
 ```bash
-python cli.py run --target <目标> --config config.yaml [--verify]
+python scripts/collector.py --target <目标> --mode deep --output output/file_groups.json
 ```
 
-### Step 4: 报告结果
+`--mode deep`：每个 Controller 方法单独一个功能簇。
+`--mode overview`：按 Controller 分组。
 
-告诉用户：
-- 分析了多少个功能簇
-- 发现了哪些业务模块
-- HTML 文件路径
-- 浏览器打开即可查看
+### Step 2: LLM 分析（OpenCode）
 
-## 传统分步运行（调试用）
+OpenCode 读取 `output/file_groups.json` 和 `references/prompt_template.md`。
 
-如果 OpenCode 无法直接跑 cli.py，可以分步执行：
+对每个功能簇：
+1. 读取 cluster 元信息（http_method, http_path, entry_class 等）
+2. 读取列出的 Java 源文件
+3. 用 LLM + prompt 模板生成 6 部分分析
+4. 保存为 `output/analyses/<cluster_id>.json`
 
-### Step 1: 收集分组
+6 部分分析：
+- **业务概述** — 100-200字大白话
+- **业务流程** — 分步骤描述
+- **关键业务规则** — 代码中的判断逻辑
+- **调用时序** — 缩进箭头格式（重要：aggregator 从中生成 Mermaid 图）
+- **数据模型** — 涉及的数据结构
+- **异常/边界情况** — 错误处理
+
+### Step 3: 合并（build_jsonl.py）
 
 ```bash
-python3 scripts/collector.py \
-  --target <目标目录或文件> \
-  --mode deep|overview \
-  --output /tmp/jbd/file_groups.json
+python scripts/build_jsonl.py --dir output/analyses --output output/analysis_results.jsonl
 ```
 
-`--mode deep`：对每个 Controller 方法单独建一个功能簇，包含它调用链上所有代码。
-`--mode overview`：按 Controller 分组，每个 Controller 一个功能簇。
-
-### Step 2: LLM 分析
+### Step 4: 生成 HTML
 
 ```bash
-# 不带校验（快）
-python3 scripts/llm_analyzer.py \
-  --groups /tmp/jbd/file_groups.json \
-  --config config.yaml \
-  --output /tmp/jbd/analysis_results.jsonl
-
-# 带自动二次校验（推荐，慢但准）
-python3 scripts/llm_analyzer.py \
-  --groups /tmp/jbd/file_groups.json \
-  --config config.yaml \
-  --output /tmp/jbd/analysis_results.jsonl \
-  --verify
+python scripts/aggregator.py --results output/analysis_results.jsonl --output output/final_model.json
+python scripts/html_assembler.py --model output/final_model.json --output output/business_doc.html
 ```
 
-**--verify 模式**（推荐）：分析完成后自动进入二次校验——把原始代码 + LLM 第一次的分析结果一起发回去，让它自己挑错。校验通过的打绿标，有修正的在 HTML 中标注为可展开的修正卡片。
-
-**容错：** 单个簇失败不影响其他簇。失败的簇在最终 HTML 中标记为「分析失败，请手动补充」。
-
-### Step 3: 汇总生成
+### Step 5: 验证（可选）
 
 ```bash
-python3 scripts/aggregator.py \
-  --results /tmp/jbd/analysis_results.jsonl \
-  --output /tmp/jbd/final_model.json
+python scripts/verifier.py --input output/final_model.json
 ```
-
-将 LLM 分析结果合并为统一的数据模型，生成 Mermaid 图表代码。
-
-### Step 4: HTML 组装
-
-```bash
-python3 scripts/html_assembler.py \
-  --model /tmp/jbd/final_model.json \
-  --output <项目名>_业务文档.html
-```
-
-生成最终的自包含 HTML 文件（Mermaid 通过 CDN 加载）。
-
-### Step 5: 交付
-
-把 HTML 文件路径告诉用户。浏览器打开即可查看。
 
 ## LLM Prompt 设计
 
 详见 `references/prompt_template.md`。
 
 核心要点：
-- 要求 LLM 从「用户视角」描述业务，而不是复述代码
-- 输出固定在 6 个部分（业务概述、业务流程、关键规则、调用时序、数据模型、异常情况）
-- 结构化输出便于后续解析和 HTML 组装
+- 从「用户视角」描述业务，不复制代码
+- 6 部分固定结构，便于 HTML 组装
+- `call_chain` 用 `→` 箭头 + 缩进 → aggregator 自动生成 Mermaid 时序图
 
 ## 输出 HTML 结构
 
 - 顶部：项目名 + 生成时间
 - 侧边栏：导航菜单（按模块/接口分组）
 - 主内容区：
-  - 每个接口一个独立章节
   - 业务概述（大白话，100-200字）
   - 调用时序图（Mermaid sequenceDiagram）
-  - 业务流程图（Mermaid flowchart，如有分支逻辑）
+  - 业务流程图（Mermaid flowchart）
   - 分步业务流程
   - 关键业务规则
   - 异常/边界情况说明
@@ -237,26 +141,25 @@ python3 scripts/html_assembler.py \
 
 ## 常见问题
 
-### LLM 分析结果不准确怎么办？
+### LLM 分析结果不准确？
 
-1. **开启二次校验：** 使用 `--verify` 参数，LLM 会自己检查自己的分析结果，挑出错误并修正。HTML 中修正内容会以黄色卡片展示。
-2. **手动编辑：** 打开 HTML，找到对应接口，手动编辑描述文字。
+手动编辑对应 `output/analyses/<cluster_id>.json` 文件，重新跑 step 3-4。
 
-### 跨模块的调用链断了？
+### 跨模块调用链断了？
 
-如果 A 模块的 Controller 调用了 B 模块的 Service，而 B 模块不在扫描范围内，该调用会被标注为「外部服务调用」。要追踪完整链路，需要同时扫描 A 和 B。
+只扫描了模块 A，但 A 调用了模块 B 的 Service——该调用标注为「外部服务调用」。要追踪完整链路，需同时扫描 A 和 B。
 
-### CDN 在公司内网无法访问？
+### CDN 在内网无法访问？
 
-Mermaid.js 默认从 jsdelivr CDN 加载。如果内网无法访问：
-1. 提前下载 mermaid.min.js 放到 HTML 同目录
-2. HTML 会自动检测 CDN 失败并提示用户
+Mermaid.js 默认从 jsdelivr CDN 加载。如果内网不通：
+1. 下载 mermaid.min.js 放到 HTML 同目录
+2. HTML 自动检测 CDN 失败并提示
 
 ## 验证清单
 
-- [ ] config.yaml 已配置内部 LLM 地址和密钥
 - [ ] 目标 Java 项目路径存在
 - [ ] collector.py 能正常识别 Controller/Service/Mapper
-- [ ] LLM 返回的 6 部分结构完整
+- [ ] OpenCode 为每个功能簇生成了分析 JSON
+- [ ] build_jsonl.py 成功合并所有分析结果
 - [ ] 生成的 HTML 中 Mermaid 图表正常渲染
 - [ ] 所有接口都在导航栏中有入口

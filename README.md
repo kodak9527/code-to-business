@@ -2,17 +2,51 @@
 
 **Java 代码 → 业务文档翻译器**
 
-把公司内部 Java 代码仓库翻译成非技术人员也能看懂的业务文档，全程代码不出内网。**设计给 OpenCode 直接用的**——clone 下来 OpenCode 自动读 AGENTS.md，一句话触发。
+把公司内部 Java 代码仓库翻译成非技术人员也能看懂的业务文档，全程代码不出内网。**给 OpenCode 直接用的**——你的 OpenCode 已对接公司 LLM，无需额外配置。
 
 ---
 
-## 核心能力
+## 管线
 
-- **注释收集** — 提取 Java 源码中的 Class/Method 注释
-- **业务语义分析** — 通过 LLM（大模型）理解代码的业务意图
-- **聚合输出** — 合并为结构化 JSON，便于后续处理
-- **HTML 文档生成** — 输出带样式、流程图、时序图的业务文档
-- **自我验证** — 自动检查文档完整性，漏掉的接口/实体会有警告
+```
+Java 源码 ──▶ collector.py ──▶ 💬 OpenCode LLM ──▶ aggregator.py ──▶ html_assembler.py ──▶ business_doc.html
+```
+
+**不需要 config.yaml。** LLM 分析这一步由 OpenCode 用自己已配置的公司模型完成。
+
+---
+
+## 在 OpenCode 中用
+
+Clone 下来后对 OpenCode 说一句话：
+
+```
+用 code-to-business 分析 /path/to/our-java-project，生成业务文档
+```
+
+OpenCode 自动读 `AGENTS.md`，知道完整的四步管线。
+
+---
+
+## 手动命令行（调试用）
+
+```bash
+# 1. 收集
+python scripts/collector.py --target /path/to/project --mode deep --output output/file_groups.json
+
+# 2. LLM 分析 → 由 OpenCode 完成（参考 AGENTS.md 中的 JSON 格式）
+#    每个功能簇保存为 output/analyses/<cluster_id>.json
+
+# 3. 合并
+python scripts/build_jsonl.py --dir output/analyses --output output/analysis_results.jsonl
+
+# 4. 聚合 + HTML
+python scripts/aggregator.py --results output/analysis_results.jsonl --output output/final_model.json
+python scripts/html_assembler.py --model output/final_model.json --output output/business_doc.html
+
+# 5. 验证（可选）
+python scripts/verifier.py --input output/final_model.json
+```
 
 ---
 
@@ -20,102 +54,32 @@
 
 ```
 code-to-business/
-├── SKILL.md                    # Skill 元信息与使用说明
-├── config.example.yaml         # 配置文件示例
+├── AGENTS.md              ← OpenCode 自动加载，完整工作流说明
+├── README.md
 ├── scripts/
-│   ├── collector.py            # 步骤1：收集 Java 源文件 & 注释
-│   ├── llm_analyzer.py          # 步骤2：LLM 业务语义分析
-│   ├── aggregator.py            # 步骤3：聚合为中间 JSON
-│   ├── html_assembler.py        # 步骤4：生成 HTML 业务文档
-│   └── verifier.py              # 步骤5（可选）：自我验证
+│   ├── collector.py       # 收集 Java 文件，按功能簇分组
+│   ├── build_jsonl.py     # 合并单文件分析结果为 JSONL
+│   ├── aggregator.py      # 聚合 + Mermaid 图表生成
+│   ├── html_assembler.py  # 生成自包含 HTML
+│   └── verifier.py        # 完整性验证
 ├── references/
-│   ├── prompt_template.md       # LLM prompt 模板
-│   └── mermaid_recipes.md       # Mermaid 流程图/时序图写法参考
-└── README.md
+│   ├── prompt_template.md # LLM Prompt 模板
+│   └── mermaid_recipes.md # Mermaid 图表写法参考
+├── config.example.yaml    # 旧版 API 模式的配置（已废弃，保留供参考）
+├── llm_analyzer.py        # 旧版 API 模式（已废弃，保留供参考）
+└── cli.py                 # 旧版命令行入口（已废弃，保留供参考）
 ```
 
 ---
 
-## 快速开始
-
-### 1. Clone & 配置
-
-```bash
-git clone https://github.com/kodak9527/code-to-business.git
-cd code-to-business
-cp config.example.yaml config.yaml
-# 编辑 config.yaml，填入 LLM API 地址/密钥
-```
-
-### 2. 一键运行
-
-```bash
-python cli.py run --target /path/to/your-java-project --config config.yaml
-```
-
-完毕。浏览器打开 `output/business_doc.html` 就是业务文档。
-
-加 `--verify` 会在最后自动检查完整性：
-
-```bash
-python cli.py run --target /path/to/project --config config.yaml --verify
-```
-
-### 3. 分步运行（调试用）
-
-```bash
-python cli.py step 1 --target /path/to/project    # 只跑收集
-python cli.py step 2 --config config.yaml          # 只跑LLM分析
-python cli.py step 3                                # 只跑聚合
-python cli.py step 4 --output 业务.html              # 只跑HTML
-python cli.py step 5                                # 只跑验证
-```
-
-### 4. 输出
+## 输出
 
 `output/` 目录：
 - `business_doc.html` — 浏览器直接打开的业务文档
 - `file_groups.json` — 收集阶段产物
-- `analysis_output.json` — LLM分析产物
-- `final_model.json` — 聚合后的最终数据模型
-
----
-
-## 给 OpenCode 用
-
-这个仓库自带 `AGENTS.md`，OpenCode 进入目录后会自动读取。直接对 OpenCode 说：
-
-```
-用 code-to-business 分析 /path/to/java-project，生成业务文档
-```
-
-OpenCode 会自动完成配置检查 → 运行管线 → 输出报告。
-
----
-
-## 工作流示意
-
-```
-Java 源码  ──▶  collector.py  ──▶  llm_analyzer.py  ──▶  aggregator.py
-              (收集注释)       (LLM业务分析)         (聚合JSON)
-                                                              │
-                                                              ▼
-                                          verifier.py ◀── html_assembler.py
-                                          (自我验证)         (生成HTML)
-```
-
----
-
-## 关于 Mermaid 图表
-
-`references/mermaid_recipes.md` 提供了常用图表的写法参考：
-
-- **流程图** — 业务判断逻辑
-- **时序图** — 接口调用顺序
-- **类图** — 实体关系
-- **状态图** — 状态机流转
-
-生成后的 HTML 里的 Mermaid 块会自动渲染。
+- `analyses/` — OpenCode 产出的单个分析 JSON
+- `analysis_results.jsonl` — 合并后的分析结果
+- `final_model.json` — 最终数据模型
 
 ---
 
