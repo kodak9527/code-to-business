@@ -1,20 +1,26 @@
 ---
 name: code-to-business
-description: Use when the user wants to understand Java code in plain business terms -- also works as a standalone CLI or OpenCode tool. Reads all Java source files, uses an internal LLM (OpenAI-compatible API) to explain business logic, and generates a self-contained HTML document with Mermaid sequence/flow diagrams. For e-commerce ops beginners who can read code repos but don't know Java.
-version: 1.0.0
+description: Use when the user wants to understand Java code in plain business terms. Primary usage is through OpenCode -- clone the repo and OpenCode reads AGENTS.md to run the pipeline. Reads Java source files, uses an internal LLM (OpenAI-compatible API) to explain business logic, and generates a self-contained HTML document with Mermaid sequence/flow diagrams. For e-commerce ops beginners who can read code repos but don't know Java.
+version: 1.1.0
 author: Hermes Agent
 license: MIT
 metadata:
   hermes:
-    tags: [java, business-analysis, documentation, html, mermaid, e-commerce]
-    related_skills: [architecture-diagram, hermes-agent-skill-authoring]
+    tags: [java, business-analysis, documentation, html, mermaid, e-commerce, opencode]
+    related_skills: [architecture-diagram, hermes-agent-skill-authoring, opencode]
 ---
 
-# Java → 业务文档生成器
+# Java → 业务文档生成器（OpenCode 原生工具）
 
 ## 概述
 
-一个完整的 pipeline，把 Java 代码仓翻译成小白能看懂的 HTML 业务文档，附带时序图和流程图。
+`code-to-business` 是一个完整的 pipeline，把 Java 代码仓翻译成小白能看懂的 HTML 业务文档，附带时序图和流程图。
+
+**设计定位：OpenCode 原生工具。** 仓库自带了 `AGENTS.md`，OpenCode 进入目录后自动加载，知道完整的五步管线怎么跑、config.yaml 怎么配、输出在哪里。在 OpenCode 里一句话就能触发：
+
+```
+用 code-to-business 分析 /path/to/java-project，生成业务文档
+```
 
 **核心流程：**
 1. 收集 Java 文件，按功能簇分组（Controller + Service + Mapper + DTO）
@@ -30,22 +36,56 @@ metadata:
 - 「下单接口的完整链路是什么样的」
 - 「这个模块有哪些接口，每个接口做什么」
 - 「把这批代码翻译成运营能看懂的文档」
+- 在 OpenCode 中直接说「用 code-to-business 分析 xxx」
 
 **不要用于：**
-- 代码审查/性能分析（这不是该 skill 的目的）
+- 代码审查/性能分析（这不是该工具的目的）
 - 非 Java 项目
+
+## OpenCode 用法（推荐）
+
+### 初次使用
+
+```bash
+git clone https://github.com/kodak9527/code-to-business.git
+cd code-to-business
+cp config.example.yaml config.yaml
+# 编辑 config.yaml，填入公司内部 LLM 地址和密钥
+```
+
+然后对 OpenCode 说：
+
+```
+用 code-to-business 分析 /path/to/your-java-project，生成业务文档
+```
+
+OpenCode 会自动：
+1. 检查 config.yaml 是否配置好
+2. 跑五步管线（或指导你手动跑）
+3. 报告结果
+
+### 手动命令行
+
+```bash
+# 一键跑完
+python cli.py run --target /path/to/project --config config.yaml
+
+# 带完整性校验
+python cli.py run --target /path/to/project --config config.yaml --verify
+
+# 分步调试
+python cli.py step 1 --target /path/to/project    # 只收集
+python cli.py step 2 --config config.yaml          # 只 LLM 分析
+python cli.py step 3                                # 只聚合
+python cli.py step 4 --output 业务.html             # 只生成 HTML
+python cli.py step 5                                # 只验证
+```
 
 ## 前置配置
 
-使用前必须配置内部 LLM 的连接信息：
-
 ```bash
-# 创建配置文件
-cp ~/.hermes/skills/devops/java-to-business-doc/config.example.yaml \
-   ~/.hermes/skills/devops/java-to-business-doc/config.yaml
-
-# 编辑配置
-vim ~/.hermes/skills/devops/java-to-business-doc/config.yaml
+cp config.example.yaml config.yaml
+vim config.yaml
 ```
 
 配置内容：
@@ -60,7 +100,7 @@ llm:
 
 **警告：** base_url 必须是公司内网地址。不要填写任何公网 LLM 地址。
 
-## 两种使用模式
+## 两种分析模式
 
 ### 模式 A: 单接口深度分析
 
@@ -82,21 +122,40 @@ llm:
 
 输出：每个接口都有独立章节，侧边栏导航，可搜索。
 
-## 工作流
+## 工作流（OpenCode 视角）
+
+当用户在 OpenCode 中说「用 code-to-business 分析 xxx」时：
 
 ### Step 1: 确认目标
 
-让用户明确要分析的范围：
-
+明确分析范围：
 - 单个 Controller 文件 → 模式 A
 - 一个包/模块 → 模式 B
-- 多个文件 → 模式 B
+- 整个项目 → 模式 B
 
 ### Step 2: 配置检查
 
-读取 `config.yaml`，确认 LLM 连接信息已填写。如果未配置，引导用户完成配置。
+读 config.yaml，确认 LLM 连接信息已填写。如果未配置，引导用户完成。
 
-### Step 3: 收集分组
+### Step 3: 运行管线
+
+```bash
+python cli.py run --target <目标> --config config.yaml [--verify]
+```
+
+### Step 4: 报告结果
+
+告诉用户：
+- 分析了多少个功能簇
+- 发现了哪些业务模块
+- HTML 文件路径
+- 浏览器打开即可查看
+
+## 传统分步运行（调试用）
+
+如果 OpenCode 无法直接跑 cli.py，可以分步执行：
+
+### Step 1: 收集分组
 
 ```bash
 python3 scripts/collector.py \
@@ -106,9 +165,9 @@ python3 scripts/collector.py \
 ```
 
 `--mode deep`：对每个 Controller 方法单独建一个功能簇，包含它调用链上所有代码。
-`--mode overview`：按 Controller 分组，每个 Controller 一个功能簇，包含该 Controller 的所有方法和相关代码。
+`--mode overview`：按 Controller 分组，每个 Controller 一个功能簇。
 
-### Step 4: LLM 分析
+### Step 2: LLM 分析
 
 ```bash
 # 不带校验（快）
@@ -125,17 +184,11 @@ python3 scripts/llm_analyzer.py \
   --verify
 ```
 
-此脚本会：
-1. 读取每个功能簇包含的 Java 文件内容
-2. 组装结构化 Prompt（见 `references/prompt_template.md`）
-3. 调用内部 LLM API
-4. 将 LLM 的 6 部分结构化输出保存为 JSONL
-
 **--verify 模式**（推荐）：分析完成后自动进入二次校验——把原始代码 + LLM 第一次的分析结果一起发回去，让它自己挑错。校验通过的打绿标，有修正的在 HTML 中标注为可展开的修正卡片。
 
 **容错：** 单个簇失败不影响其他簇。失败的簇在最终 HTML 中标记为「分析失败，请手动补充」。
 
-### Step 5: 汇总生成
+### Step 3: 汇总生成
 
 ```bash
 python3 scripts/aggregator.py \
@@ -145,7 +198,7 @@ python3 scripts/aggregator.py \
 
 将 LLM 分析结果合并为统一的数据模型，生成 Mermaid 图表代码。
 
-### Step 6: HTML 组装
+### Step 4: HTML 组装
 
 ```bash
 python3 scripts/html_assembler.py \
@@ -155,9 +208,9 @@ python3 scripts/html_assembler.py \
 
 生成最终的自包含 HTML 文件（Mermaid 通过 CDN 加载）。
 
-### Step 7: 交付
+### Step 5: 交付
 
-把 HTML 文件路径告诉用户。用户在浏览器打开即可查看。
+把 HTML 文件路径告诉用户。浏览器打开即可查看。
 
 ## LLM Prompt 设计
 
@@ -187,7 +240,7 @@ python3 scripts/html_assembler.py \
 ### LLM 分析结果不准确怎么办？
 
 1. **开启二次校验：** 使用 `--verify` 参数，LLM 会自己检查自己的分析结果，挑出错误并修正。HTML 中修正内容会以黄色卡片展示。
-2. **手动编辑：** 打开 HTML，找到对应接口，手动编辑描述文字。HTML 是普通的文本内容，不需要重新生成。
+2. **手动编辑：** 打开 HTML，找到对应接口，手动编辑描述文字。
 
 ### 跨模块的调用链断了？
 
@@ -195,7 +248,7 @@ python3 scripts/html_assembler.py \
 
 ### CDN 在公司内网无法访问？
 
-Mermaid.js 默认从 jsdelivr CDN 加载。如果内网无法访问，可以：
+Mermaid.js 默认从 jsdelivr CDN 加载。如果内网无法访问：
 1. 提前下载 mermaid.min.js 放到 HTML 同目录
 2. HTML 会自动检测 CDN 失败并提示用户
 

@@ -1,8 +1,8 @@
-# code-to-business
+# code-to-business — OpenCode 原生工具
 
 **Java 代码 → 业务文档翻译器**
 
-把公司内部 Java 代码仓库翻译成非技术人员也能看懂的业务文档，全程代码不出内网。
+把公司内部 Java 代码仓库翻译成非技术人员也能看懂的业务文档，全程代码不出内网。**设计给 OpenCode 直接用的**——clone 下来 OpenCode 自动读 AGENTS.md，一句话触发。
 
 ---
 
