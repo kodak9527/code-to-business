@@ -1,0 +1,37 @@
+# Java to Business Doc - 内部 LLM 配置示例
+# 复制此文件为 config.yaml 并填写真实信息
+# cp config.example.yaml config.yaml
+
+llm:
+  # 公司内部 LLM 的 OpenAI 兼容 API 地址
+  # ⚠️ 必须是公司内网地址，不要填写公网地址
+  base_url: "http://your-internal-llm.company.com/v1"
+  
+  # API 密钥
+  api_key: "your-api-key-here"
+  
+  # 模型名称
+  model: "your-model-name"
+  
+  # 每次请求的最大输出 token 数
+  max_tokens: 4096
+  
+  # 温度（0.1-1.0），越低越稳定，推荐 0.3
+  temperature: 0.3
+  
+  # 每分钟最大请求数（避免打爆 LLM）
+  rate_limit_rpm: 10
+  
+  # 单个功能簇的 token 上限，超过则拆分
+  max_cluster_tokens: 20000
+
+# HTML 输出设置
+output:
+  # Mermaid.js 加载方式: "cdn" 或 "offline"
+  mermaid_source: "cdn"
+  
+  # Mermaid CDN URL
+  mermaid_cdn: "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"
+  
+  # 离线模式时 mermaid.min.js 的文件名
+  mermaid_offline_file: "mermaid.min.js"
