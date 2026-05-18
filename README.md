@@ -38,28 +38,58 @@ code-to-business/
 
 ## 快速开始
 
-### 1. 配置
+### 1. Clone & 配置
 
 ```bash
+git clone https://github.com/kodak9527/code-to-business.git
+cd code-to-business
 cp config.example.yaml config.yaml
-# 编辑 config.yaml，填入 LLM API 地址/密钥、代码仓库路径
+# 编辑 config.yaml，填入 LLM API 地址/密钥
 ```
 
-### 2. 运行
+### 2. 一键运行
 
 ```bash
-python scripts/collector.py --config config.yaml
-python scripts/llm_analyzer.py --config config.yaml [--verify]
-python scripts/aggregator.py --config config.yaml
-python scripts/html_assembler.py --config config.yaml
-python scripts/verifier.py --config config.yaml --input output/
+python cli.py run --target /path/to/your-java-project --config config.yaml
 ```
 
-### 3. 输出
+完毕。浏览器打开 `output/business_doc.html` 就是业务文档。
 
-`output/` 目录下生成：
-- `business_doc.html` — 可直接在浏览器打开的业务文档
-- `aggregated.json` — 中间聚合数据（可供其他工具二次处理）
+加 `--verify` 会在最后自动检查完整性：
+
+```bash
+python cli.py run --target /path/to/project --config config.yaml --verify
+```
+
+### 3. 分步运行（调试用）
+
+```bash
+python cli.py step 1 --target /path/to/project    # 只跑收集
+python cli.py step 2 --config config.yaml          # 只跑LLM分析
+python cli.py step 3                                # 只跑聚合
+python cli.py step 4 --output 业务.html              # 只跑HTML
+python cli.py step 5                                # 只跑验证
+```
+
+### 4. 输出
+
+`output/` 目录：
+- `business_doc.html` — 浏览器直接打开的业务文档
+- `file_groups.json` — 收集阶段产物
+- `analysis_output.json` — LLM分析产物
+- `final_model.json` — 聚合后的最终数据模型
+
+---
+
+## 给 OpenCode 用
+
+这个仓库自带 `AGENTS.md`，OpenCode 进入目录后会自动读取。直接对 OpenCode 说：
+
+```
+用 code-to-business 分析 /path/to/java-project，生成业务文档
+```
+
+OpenCode 会自动完成配置检查 → 运行管线 → 输出报告。
 
 ---
 

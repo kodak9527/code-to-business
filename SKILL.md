@@ -1,6 +1,6 @@
 ---
-name: java-to-business-doc
-description: Use when the user wants to understand Java code in plain business terms. Reads all Java source files, uses an internal LLM (OpenAI-compatible API) to explain business logic, and generates a self-contained HTML document with Mermaid sequence/flow diagrams. For e-commerce ops beginners who can read code repos but don't know Java.
+name: code-to-business
+description: Use when the user wants to understand Java code in plain business terms -- also works as a standalone CLI or OpenCode tool. Reads all Java source files, uses an internal LLM (OpenAI-compatible API) to explain business logic, and generates a self-contained HTML document with Mermaid sequence/flow diagrams. For e-commerce ops beginners who can read code repos but don't know Java.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
