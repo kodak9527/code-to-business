@@ -12,26 +12,61 @@ parse_analysis.py — 将 OpenCode 产出的 markdown 分析文件解析为 JSON
 import argparse, json, re, sys
 from pathlib import Path
 
-# 6 个部分的标题模式
-SECTION_PATTERNS = [
-    ('summary',     r'={3,}\s*业务概述\s*={3,}'),
-    ('flow',        r'={3,}\s*业务流程\s*={3,}'),
-    ('rules',       r'={3,}\s*关键业务规则\s*={3,}'),
-    ('call_chain',  r'={3,}\s*调用时序\s*={3,}'),
-    ('data_models', r'={3,}\s*数据模型\s*={3,}'),
-    ('exceptions',  r'={3,}\s*异常[／/]边界情况\s*={3,}'),
-]
+# 每个部分的多种标题变体（按优先级尝试匹配）
+SECTION_PATTERNS = {
+    'summary': [
+        r'={3,}\s*业务概述\s*={3,}',
+        r'业务概述[：:\s]+',
+        r'【业务概述】',
+        r'#\s*业务概述',
+    ],
+    'flow': [
+        r'={3,}\s*业务流程\s*={3,}',
+        r'业务流程[：:\s]+',
+        r'【业务流程】',
+        r'#\s*业务流程',
+    ],
+    'rules': [
+        r'={3,}\s*关键业务规则\s*={3,}',
+        r'关键业务规则[：:\s]+',
+        r'【关键业务规则】',
+        r'#\s*关键业务规则',
+    ],
+    'call_chain': [
+        r'={3,}\s*调用时序\s*={3,}',
+        r'调用时序[：:\s]+',
+        r'【调用时序】',
+        r'#\s*调用时序',
+    ],
+    'data_models': [
+        r'={3,}\s*数据模型\s*={3,}',
+        r'数据模型[：:\s]+',
+        r'【数据模型】',
+        r'#\s*数据模型',
+    ],
+    'exceptions': [
+        r'={3,}\s*异常[／/]?\s*边界情况\s*={3,}',
+        r'异常[／/]?\s*边界情况[：:\s]+',
+        r'【异常[／/]?边界情况】',
+        r'#\s*异常[／/]?\s*边界情况',
+    ],
+}
 
 
 def parse_sections(text: str) -> dict:
-    """解析 markdown 中的 6 个部分。返回 {section_name: content}。"""
+    """
+    解析 markdown 中的 6 个部分。支持标题的多种变体格式。
+    返回 {section_name: content}，缺失的部分返回空字符串。
+    """
     result = {}
     positions = []
 
-    for name, pattern in SECTION_PATTERNS:
-        m = re.search(pattern, text)
-        if m:
-            positions.append((m.start(), m.end(), name))
+    for name, patterns in SECTION_PATTERNS.items():
+        for pattern in patterns:
+            m = re.search(pattern, text, re.IGNORECASE)
+            if m:
+                positions.append((m.start(), m.end(), name))
+                break
 
     positions.sort()
 
@@ -43,7 +78,32 @@ def parse_sections(text: str) -> dict:
             content = text[end:].strip()
         result[name] = content
 
+    # 确保所有 6 个部分都存在，缺失的返回空
+    for name in SECTION_PATTERNS:
+        if name not in result:
+            result[name] = ''
+
     return result
+
+
+def validate_sections(sections: dict, cluster_id: str) -> list:
+    """
+    检查解析出的 sections 是否有空内容。
+    返回警告信息列表。
+    """
+    warnings = []
+    required = ['summary', 'flow', 'call_chain']
+    recommended = ['rules', 'data_models', 'exceptions']
+
+    for name in required:
+        if not sections.get(name):
+            warnings.append(f"[{cluster_id}] 必填部分「{name}」解析结果为空")
+
+    for name in recommended:
+        if not sections.get(name):
+            warnings.append(f"[{cluster_id}] 建议部分「{name}」解析结果为空")
+
+    return warnings
 
 
 def parse_flow(text: str) -> list:
@@ -53,12 +113,11 @@ def parse_flow(text: str) -> list:
         line = line.strip()
         if not line:
             continue
-        # 匹配 "步骤N: ..." 或 "N. ..." 或 "N、..." 或 "- ..."
-        m = re.match(r'(?:步骤\s*\d+[：:.]?\s*|\d+[.、)\s]\s*|[-*]\s*)(.+)', line)
+        # 匹配 "步骤N: ..." / "N. ..." / "N、..." / "- ..."
+        m = re.match(r'(?:步骤\s*\d+[：:.、]?\s*|\d+[.、)\s]\s*|[-*]\s*)(.+)', line)
         if m:
             steps.append(m.group(1).strip())
         elif line and not line.startswith('#'):
-            # 非标题行，也当作步骤
             steps.append(line)
     return steps
 
@@ -70,7 +129,6 @@ def parse_rules(text: str) -> list:
         line = line.strip()
         if not line or line.startswith('#'):
             continue
-        # 去掉开头的 - * 或编号
         cleaned = re.sub(r'^[-*]\s*|\d+[.、)]\s*', '', line).strip()
         if cleaned and '无明显业务规则' not in cleaned:
             rules.append(cleaned)
@@ -95,6 +153,7 @@ def main():
     parser.add_argument('--dir', required=True, help='分析 markdown 文件目录')
     parser.add_argument('--groups', required=True, help='file_groups.json 路径')
     parser.add_argument('--output', required=True, help='输出 JSONL 路径')
+    parser.add_argument('--strict', action='store_true', help='有空 section 时退出码非 0')
     args = parser.parse_args()
 
     analyses_dir = Path(args.dir)
@@ -102,7 +161,6 @@ def main():
         print(f"❌ 目录不存在: {args.dir}", file=sys.stderr)
         sys.exit(1)
 
-    # 读取 file_groups.json 获取每个 cluster 的元信息
     with open(args.groups, 'r', encoding='utf-8') as f:
         groups_data = json.load(f)
 
@@ -117,10 +175,11 @@ def main():
     success_count = 0
     fail_count = 0
     skipped_count = 0
+    all_warnings = []
 
     with open(args.output, 'w', encoding='utf-8') as out:
         for fpath in md_files:
-            cluster_id = fpath.stem  # 文件名去掉 .md
+            cluster_id = fpath.stem
             print(f"  解析: {cluster_id} ...", end=' ')
 
             cluster_meta = cluster_map.get(cluster_id)
@@ -133,7 +192,7 @@ def main():
                 text = f.read()
 
             # 检查是否标记为失败
-            if re.search(r'={3,}\s*状态[：:]\s*失败\s*={3,}', text):
+            if re.search(r'={3,}\s*状态[：:]\s*失败\s*={3,}', text, re.IGNORECASE):
                 fail_match = re.search(r'状态[：:]\s*失败\s*={3,}\s*\n?(.+)', text, re.DOTALL)
                 error_msg = fail_match.group(1).strip()[:200] if fail_match else '分析失败'
                 entry = {
@@ -154,6 +213,10 @@ def main():
 
             # 解析 6 个部分
             sections = parse_sections(text)
+
+            # 校验空 section
+            warnings = validate_sections(sections, cluster_id)
+            all_warnings.extend(warnings)
 
             summary = sections.get('summary', '')
             flow_text = sections.get('flow', '')
@@ -190,6 +253,18 @@ def main():
             success_count += 1
 
     print(f"\n📊 解析完成: {success_count} 成功, {fail_count} 失败, {skipped_count} 跳过")
+
+    if all_warnings:
+        print(f"\n⚠️  空 section 警告 ({len(all_warnings)} 条):")
+        for w in all_warnings[:10]:
+            print(f"   {w}")
+        if len(all_warnings) > 10:
+            print(f"   ... 还有 {len(all_warnings) - 10} 条")
+
+    if all_warnings and args.strict:
+        print("\n❌ strict 模式：有空 section，退出码 1")
+        sys.exit(1)
+
     print(f"   输出: {args.output}")
 
 
