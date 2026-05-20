@@ -1,0 +1,40 @@
+{
+  "description": "典型用户场景，用于实测验证 skill 输出质量",
+  "version": "1.0",
+  "test_prompts": [
+    {
+      "id": "tp_order_create",
+      "description": "典型业务接口分析",
+      "prompt": "分析这个 Java 项目中的 OrderController，给我生成业务文档",
+      "expected_clusters": ["OrderController.createOrder", "OrderController.getOrder", "OrderController.cancelOrder"],
+      "success_criteria": {
+        "min_sections": 6,
+        "must_have_call_chain_arrows": true,
+        "no_hallucinated_rules": true,
+        "business_overview_readable": true
+      }
+    },
+    {
+      "id": "tp_inventory_check",
+      "description": "库存检查场景",
+      "prompt": "Explain how InventoryService.checkStock works to a non-technical stakeholder",
+      "expected_clusters": ["InventoryService.checkStock"],
+      "success_criteria": {
+        "min_sections": 6,
+        "no_code_terms_in_overview": true,
+        "rules_tied_to_code": true
+      }
+    },
+    {
+      "id": "tp_payment_flow",
+      "description": "支付流程多服务串联",
+      "prompt": "Analyze the payment flow in this project and generate business docs",
+      "expected_clusters": ["PaymentController.processPayment", "PaymentService.validatePayment", "PaymentService.executePayment"],
+      "success_criteria": {
+        "min_sections": 6,
+        "cross_service_call_chain_coherent": true,
+        "all_clusters_analyzed": true
+      }
+    }
+  ]
+}
