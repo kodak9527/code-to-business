@@ -1,11 +1,40 @@
 ---
 name: code-to-business
 description: Transform Java code into business documentation. Use when asked to analyze Java projects, generate business docs from code, or explain Java interfaces to non-engineers. Works directly in OpenCode — run collector, use your LLM for the 6-part analysis, then assemble HTML with Mermaid diagrams.
+version: "2.1"
+tags:
+  - java
+  - documentation
+  - business-analysis
+  - opencode
+examples:
+  - "Analyze this Java project and generate business docs"
+  - "Explain OrderController.java to a non-technical stakeholder"
 ---
 
 # code-to-business — OpenCode Agent Instructions
 
 You are executing the code-to-business pipeline. Follow these steps in order.
+
+## Pre-flight Check（开始前必做）
+
+执行任何步骤前，验证所有资源和脚本可用：
+
+```bash
+# 验证脚本存在且可执行
+for script in scripts/collector.py scripts/parse_analysis.py scripts/aggregator.py scripts/verifier.py scripts/html_assembler.py; do
+  if [ ! -f "$script" ]; then echo "MISSING: $script"; exit 1; fi
+  if [ ! -r "$script" ]; then echo "UNREADABLE: $script"; exit 1; fi
+done
+
+# 验证 references 存在
+if [ ! -f "references/prompt_template.md" ]; then echo "MISSING: references/prompt_template.md"; exit 1; fi
+
+# 验证 Python 依赖（collector.py 需要 pyyaml）
+python -c "import yaml" 2>/dev/null || echo "WARNING: pyyaml not available"
+```
+
+若任何检查失败，停止并报告缺失资源。
 
 ## Pipeline Flow
 
@@ -233,6 +262,42 @@ python scripts/html_assembler.py --model output/final_model.json --output output
 若有失败，另报告：
 - 失败的簇列表（cluster_id）
 - 建议用户检查是否接受部分结果，或修复后重跑
+
+## 错误排查与边界情况
+
+### 常见失败场景及应对
+
+| 症状 | 可能原因 | 解决方案 |
+|------|----------|----------|
+| `file_groups.json` 为空或格式错误 | collector.py 运行失败 | 检查 Java 源码路径是否正确；确认 `--mode` 参数有效 |
+| LLM 返回不完整（缺 section） | 模型输出被截断或网络中断 | 该簇标记为失败，重新运行 Step 2c |
+| `=== 调用时序 ===` 无 `→` 箭头 | LLM 格式遵循问题 | 软警告，记录但继续；重分析时可强调格式要求 |
+| 分析文件数量 < 簇数量 | 某些簇元数据校验失败 | 检查 `output/analyses/` 中标记为失败的文件 |
+| verifier 报告规则不匹配 | LLM 幻觉或代码理解错误 | 重新分析对应簇；如持续失败，记录为已知限制 |
+| HTML 生成失败 | `final_model.json` 结构异常 | 检查 aggregator 是否成功运行；查看脚本错误输出 |
+
+### 边界条件速查
+
+- **0 个簇**：collector 未找到任何 Controller/Service，提前终止并报告
+- **1 个簇**：正常运行，不影响流程
+- **大量簇（>100）**：分批处理，每批 20-30 个，设置检查点
+- **Java 文件路径含空格**：脚本需用引号包裹路径（已由 collector.py 处理）
+- **LLM 超时**：保存已获取的部分，标记为部分失败
+
+### 调试模式
+
+若问题难定位，使用以下命令获取详细输出：
+
+```bash
+# 单独运行 collector 并查看原始 JSON
+python scripts/collector.py --target <PROJECT_PATH> --mode deep --output /dev/stdout
+
+# 单独测试 parse_analysis
+python scripts/parse_analysis.py --dir output/analyses --groups output/file_groups.json --output /tmp/test.jsonl --verbose
+
+# 检查 aggregator 跳过哪些条目
+python scripts/aggregator.py --results output/analysis_results.jsonl --output /dev/stdout 2>&1 | grep -i skip
+```
 
 ## 重要规则
 
