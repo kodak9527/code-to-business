@@ -230,22 +230,34 @@ python scripts/parse_analysis.py --dir output/analyses --groups output/file_grou
 - 若解析因缺少部分而失败，脚本警告具体簇和部分 — 重新运行该簇的分析（Step 2）
 - 加 `--strict` flag 使空部分警告导致非零退出码（适用于 CI）
 
-## Step 4 — 聚合 + HTML
+## Step 4 — 聚合（生成 final_model.json）
 
 ```bash
 python scripts/aggregator.py --results output/analysis_results.jsonl --output output/final_model.json
-python scripts/html_assembler.py --model output/final_model.json --output output/business_doc.html
 ```
 
-Aggregator 静默跳过 `success: false` 的条目。最终 HTML 仅包含成功分析的簇。
+Aggregator 静默跳过 `success: false` 的条目。最终数据模型仅包含成功分析的簇。
+
+**注意**：此步只生成 `final_model.json`，不生成 HTML。HTML 生成在 Step 6（用户确认之后）。
 
 ## Step 5 — 验证（必须）
 
 ```bash
-python scripts/verifier.py --input output/final_model.json
+python scripts/verifier.py \
+  --results output/analysis_results.jsonl \
+  --groups output/file_groups.json \
+  --config config.yaml \
+  --output output/verified_results.jsonl
 ```
 
-**此步必须执行。**跳过则可能交付包含臆造规则、缺失步骤或错误调用链的文档。verifier 通过对照原始代码交叉检查来发现这些问题。
+**此步必须执行。** 跳过则可能交付包含臆造规则、缺失步骤或错误调用链的文档。verifier 对每条成功分析进行二次校验，对照原始代码挑错。
+
+**verifier 输出的统计指标**：
+- `total`：需要校验的条目数
+- `verified`：校验通过（无修正）
+- `corrected`：发现并接受了修正
+- `failed`：校验调用失败（网络错误等）
+- `skipped`：已跳过（失败条目或 dry-run）
 
 ## Step 5b — 用户确认（必须）
 
