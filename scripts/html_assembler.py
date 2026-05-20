@@ -899,7 +899,7 @@ def build_api_card_technical(api: dict) -> str:
   <h3>📊 调用时序图</h3>
   <div class="mermaid-block">
     <pre class="mermaid">
-{api['sequence_diagram']}
+{escape_html(api['sequence_diagram'])}
     </pre>
   </div>''')
 
@@ -908,7 +908,7 @@ def build_api_card_technical(api: dict) -> str:
   <h3>🔄 业务流程</h3>
   <div class="mermaid-block">
     <pre class="mermaid">
-{api['flowchart_diagram']}
+{escape_html(api['flowchart_diagram'])}
     </pre>
   </div>''')
 
@@ -1022,7 +1022,7 @@ def build_api_card_newcomer(api: dict) -> str:
   <h3>📊 调用时序图</h3>
   <div class="mermaid-block">
     <pre class="mermaid">
-{api['sequence_diagram']}
+{escape_html(api['sequence_diagram'])}
     </pre>
   </div>''')
 
