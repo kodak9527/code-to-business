@@ -1,65 +1,144 @@
 ---
 name: code-to-business
-description: 电商业务分析 Skill。将 Java 代码转换为业务文档。当被要求"分析电商业务"、"梳理业务流程"、"生成本业务文档"时使用。直接在 OpenCode 中工作 — 扫描 Service/Controller/DAO 层，追踪核心调用链，生成带 Mermaid 图的业务文档。
-version: "3.0"
-tags:
-  - java
-  - documentation
-  - business-analysis
-  - e-commerce
-  - opencode
-examples:
-  - "分析电商业务"
-  - "梳理业务流程"
-  - "生成本业务文档"
+description: 电商业务分析 Skill。从代码生成完整业务流图和文档。当用户说"分析电商业务"、"梳理业务流程"、"生成本业务文档"时激活。扫描代码仓库，生成带 Mermaid 时序图/泳道图、异常分支表、数据表映射的业务文档。
+version: "4.0"
 ---
 
-# code-to-business — 电商业务分析 Skill
+# 电商业务分析 Skill
 
-## 触发词
+## 触发条件
 
-当用户说以下内容时，激活本 Skill：
+当用户发送以下指令时激活此 skill：
 - "分析电商业务"
 - "梳理业务流程"
 - "生成本业务文档"
+- "生成 skill 文件"
 
-## 分析维度（必做）
+## 执行步骤
 
-### 1. 模块扫描
-定位项目中所有：
-- **Service 层**：业务逻辑核心
-- **Controller 层**：对外 API 入口
-- **DAO/Mapper 层**：数据访问层
+### Step 1: 代码扫描
 
-### 2. 入口识别
-找到所有对外 API 入口，记录：
-- HTTP 方法 + 路径
-- 入口类和方法
-- 请求参数概要
+1. 扫描代码根目录，列出所有微服务模块
+2. 识别每个模块的职责和边界
+3. 标注模块间依赖关系
 
-### 3. 流程追踪
-追踪**至少 5 个核心用户操作**的完整调用链，包括：
-- 车辆销售相关流程
-- 企业客户相关流程
-- 支付/订单流程
-- 用户操作流程
+### Step 2: 业务流分析
 
-### 4. 数据流标注
-记录每个操作涉及：
-- 数据表（MySQL/Oracle）
-- 缓存（DCS/Redis）
-- 外部服务调用
+对每个核心用户操作进行分析（至少覆盖以下场景）：
 
-## 重点关注模块
+| 场景 | 说明 |
+|------|------|
+| 用户浏览车辆列表 | 首页/列表页查询 |
+| 用户查看车辆详情 | 单个商品详情 |
+| 用户提交购车意向 | 留资/咨询 |
+| 用户预约试驾 | 预约到店 |
+| 用户下单 | 创建订单 |
+| 订单支付 | 支付流程 |
+| 订单履约/交付 | 交付完成 |
 
-以下模块需要重点分析：
+**每个场景必须输出：**
 
-| 模块类型 | 说明 |
-|---------|------|
-| 车辆销售模块 | 整车销售、库存管理、价格计算 |
-| 企业客户模块 | 企业客户管理、授信、结算 |
-| 支付/订单模块 | 支付通道、订单状态、优惠券 |
-| 缓存使用场景 | DCS/Redis 缓存策略、缓存键设计 |
+1. **API 入口**：`请求路径 + 方法 + 功能描述`
+2. **时序图**：使用 Mermaid `sequenceDiagram` 语法
+3. **泳道图**：使用 Mermaid `graph TD` 语法，标注各服务/数据库
+4. **异常分支表**：列出所有错误码和处理逻辑
+5. **数据表映射**：涉及哪些表、哪些字段
+6. **缓存 Key**：涉及的 DCS Key 及过期时间
+
+### Step 3: 特殊业务识别
+
+重点标注：
+- 车辆销售特有流程（与普通商品的区别）
+- 企业客户购车流程
+- 跨微服务调用及服务名
+
+### Step 4: 汇总输出
+
+生成完整的 Markdown 报告，包含：
+- 微服务架构图
+- 每个核心操作的完整流程图
+- 数据字典
+- 待分析其他微服务建议清单
+
+## 格式规范
+
+### 时序图规范
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant GW as API网关
+    participant VS as 车辆服务
+    participant DCS as DCS缓存
+    participant DB as 数据库
+
+    U->>GW: 操作描述
+    GW->>VS: API 路径
+    VS->>DCS: 缓存操作
+    VS->>DB: 数据库操作
+    alt 正常流程
+        DB-->>VS: 返回数据
+        VS-->>GW: 成功响应
+    else 异常流程
+        DB-->>VS: 异常
+        VS-->>GW: {code: xxx, msg: "错误信息"}
+    end
+    GW-->>U: 最终响应
+```
+
+### 泳道图规范
+
+```mermaid
+graph TD
+    subgraph API网关
+        A[接收请求]
+    end
+    subgraph 车辆服务
+        B[业务逻辑]
+        C[数据处理]
+    end
+    subgraph DCS缓存
+        D[缓存读写]
+    end
+    subgraph 数据库
+        E[表1]
+        F[表2]
+    end
+
+    A --> B
+    B --> D
+    B --> C
+    C --> E
+    C --> F
+```
+
+### 异常分支表规范
+
+| 异常场景 | 错误码 | 处理逻辑 |
+|----------|--------|----------|
+| 参数校验失败 | 1001 | 返回参数错误提示 |
+| 缓存未命中 | - | 降级查数据库 |
+| 库存不足 | 2001 | 返回库存不足提示 |
+
+### 数据表映射规范
+
+| 数据库表 | 字段 | 类型 | 说明 |
+|----------|------|------|------|
+| vehicle | id | BIGINT | 主键 |
+| vehicle | name | VARCHAR(100) | 车辆名称 |
+
+### 脱敏要求
+
+- 表名和字段名保留实际名称
+- 敏感数据用 `xxx` 替代
+- 错误码和业务规则必须真实反映代码中的实现
+
+## 执行约束
+
+1. **必须实际读取代码文件**，不能假设
+2. 每个核心流程必须有对应的 Mermaid 图
+3. 报告中必须标注代码中实际存在的数据表和 API 路径
 
 ## 脚本清单
 
@@ -99,7 +178,7 @@ python -c "import yaml" 2>/dev/null || echo "WARNING: pyyaml not available"
 collector.py → [LLM 分析] → parse_analysis.py → aggregator.py → verifier.py → [用户确认] → html_assembler.py
 ```
 
-你的任务：扫描模块、追踪调用链、生成带 Mermaid 图的业务文档。
+你的任务：扫描代码仓库，生成带 Mermaid 图的业务文档。
 
 ## Step 0 — 初始设置（仅首次）
 
@@ -113,6 +192,7 @@ mkdir -p output/analyses
 
 分析项目时，首先识别：
 
+**微服务模块**：查找 `*-service`、`*-api`、`*-web` 等命名模式的模块
 **Service 层**：查找 `*Service.java`、`*ServiceImpl.java`
 **Controller 层**：查找 `*Controller.java`
 **DAO 层**：查找 `*DAO.java`、`*Mapper.java`
@@ -167,70 +247,44 @@ python scripts/collector.py --target <PROJECT_PATH> --mode deep --output output/
 
 ### Step 2c — 调用 LLM
 
-发送系统提示 + 用户提示。期望返回 6 个部分，格式必须严格遵循：
+发送系统提示 + 用户提示。期望返回完整的业务分析内容，包含：
 
-**1. `=== 业务概述 ===`**
-- 100-200 字，一段话，大白话
-- 从用户视角：用户做了什么操作，系统返回了什么
-- 禁止出现类名、方法名、代码术语
-- 示例：`客户提交订单后，系统创建订单记录，返回订单号和预计发货时间`
+**1. API 入口**
+- 请求路径 + 方法 + 功能描述
 
-**2. `=== 业务流程 ===`**
-- 编号列表，每步格式：`步骤N: 做什么 → 得到什么结果`
-- 步骤顺序必须与调用时序一致
-- 每个步骤都要有用户可见的动作和系统响应
-- 示例：`步骤1: 客户填写订单信息并提交 → 系统验证库存`
+**2. 时序图**
+- 使用 Mermaid `sequenceDiagram` 语法
+- 包含 `autonumber`、各参与者、正常/异常分支
 
-**3. `=== 关键业务规则 ===`**
-- 无序列表（`-`），每条规则格式：`规则描述: 具体条件或逻辑`
-- 只写代码中明确实现的 if/else/validate 逻辑
-- 禁止编造规则；没有则写 `无明显业务规则`
-- 示例：`- 库存扣减: 下单时立即扣减库存，不预留`
+**3. 泳道图**
+- 使用 Mermaid `graph TD` 语法
+- 标注各服务/数据库边界
 
-**4. `=== 调用时序 ===`**
-- 缩进箭头链，必须包含 `→` 箭头
-- 格式严格遵循：
-  ```
-  客户端 → Controller.method(参数含义)
-    → Service.method(参数含义) — 这一步做了什么
-      → Mapper.method(参数含义) — 操作了什么数据
-    → 返回 Result<类型> 给客户端
-  ```
-- 每层缩进 2 空格；参数要写明含义，不能只是变量名
+**4. 异常分支表**
+- 列出所有错误码和处理逻辑
 
-**5. `=== 数据模型 ===`**
-- 列出涉及的主要 Java 类及其字段
-- 格式：
-  ```
-  - ClassName: 用途简述
-    - fieldName (Type): 字段含义
-  ```
-- 示例：
-  ```
-  - OrderDTO: 客户提交的订单数据
-    - itemId (Long): 商品ID
-    - quantity (Integer): 购买数量
-  ```
+**5. 数据表映射**
+- 涉及哪些表、哪些字段
 
-**6. `=== 异常/边界情况 ===`**
-- 无序列表，每条说明一种异常及处理方式
-- 格式：`情况描述 → 处理逻辑`
-- 没有异常处理则写 `无特殊异常处理`
-- 示例：`库存不足 → 返回错误码 E100，提示客户库存不够`
+**6. 缓存 Key**
+- 涉及的 DCS/Redis Key 及过期时间
 
 ### Step 2d — 分析后检查（检查点 2）
 
 LLM 返回后，验证输出结构：
 
-**6 部分检查** — 确认每个部分都存在：
-- 必须包含全部 6 个 section header
-- 缺失任意部分 → 记为部分失败，文件中包含标记并注明缺失的部分
+**完整性检查** — 确认每个部分都存在：
+- API 入口
+- 时序图（Mermaid 代码块）
+- 泳道图（Mermaid 代码块）
+- 异常分支表（表格格式）
+- 数据表映射（表格格式）
+- 缓存 Key（如适用）
 
-**调用链格式检查** — 若 `=== 调用时序 ===` 非空，确认包含 `→` 箭头：
-- 未找到 `→` → 文件中警告 call_chain 可能格式错误
-- 这是软检查（非阻塞），我们对 LLM 有一定信任
-
-**文件名检查** — 确认 `cluster_id` 与 `file_groups.json` 一致。
+**格式检查** — 确认 Mermaid 图语法正确：
+- `sequenceDiagram` 有 `autonumber`
+- `graph TD` 格式正确
+- 表格有表头和分隔线
 
 **失败决策树**：
 
@@ -255,17 +309,17 @@ LLM 返回后，验证输出结构：
 
 分析完成后、进入 Step 3 之前，对照以下清单逐项核对：
 
-- [ ] **业务概述** — 是大白话吗？非技术人员能看懂吗？
-- [ ] **业务流程** — 步骤顺序与调用时序一致吗？每步都有用户动作和系统响应吗？
-- [ ] **关键业务规则** — 规则在代码里有对应逻辑吗？有没有编造？
-- [ ] **调用时序** — 包含 `→` 箭头吗？每步都写明了参数含义吗？
-- [ ] **数据模型** — 字段名和类型与代码一致吗？字段含义准确吗？
-- [ ] **异常/边界情况** — 列出的异常在代码中有对应处理吗？
-- [ ] **幻觉检查** — 整个输出中有没有出现代码里不存在的类名、方法名、字段、规则？
+- [ ] **API 入口** — 路径、方法、功能描述完整吗？
+- [ ] **时序图** — Mermaid 语法正确吗？包含所有参与者吗？
+- [ ] **泳道图** — 服务边界标注清楚吗？
+- [ ] **异常分支表** — 错误码和处理逻辑与代码一致吗？
+- [ ] **数据表映射** — 表名和字段名真实存在吗？
+- [ ] **缓存 Key** — DCS/Redis Key 格式正确吗？
+- [ ] **幻觉检查** — 整个输出中有没有出现代码里不存在的类名、方法名、表名？
 - [ ] **敏感信息检查** — 是否包含密码、密钥、手机号等敏感信息？如有需脱敏
 
-任一硬性问题（如幻觉内容、调用链缺箭头）→ 标记失败并重分析。
-软性问题（如表述不够大白话）→ 记录但不阻塞，可接受但需改进。
+任一硬性问题（如 Mermaid 语法错误、数据表不存在）→ 标记失败并重分析。
+软性问题（如表述不够清晰）→ 记录但不阻塞，可接受但需改进。
 
 ### 批量处理 + 断点续传策略
 
@@ -291,72 +345,13 @@ LLM 返回后，验证输出结构：
 - 若想重试失败簇 → 必须先手动删除其 .md 文件 → 重新运行 Step 2
 - 不删除直接重跑会被跳过
 
-### 示例：组装提示
-
-假设 `file_groups.json` 中有如下簇：
-```json
-{
-  "cluster_id": "OrderController.createOrder",
-  "http_method": "POST",
-  "http_path": "/api/orders",
-  "entry_class": "OrderController",
-  "entry_method": "createOrder",
-  "files": ["src/OrderController.java", "src/OrderService.java"]
-}
-```
-
-文件内容：
-- `OrderController.java` → `public Order createOrder(OrderDTO dto) {...}`
-- `OrderService.java` → `public Order createOrder(OrderDTO dto) { orderMapper.insert(o); ...}`
-
-组装后（节选）：
-```
-分析以下 API 端点：
-
-**端点**: POST /api/orders
-**入口方法**: OrderController.createOrder
-
-**代码**:
-```java
-// OrderController.java
-public Order createOrder(OrderDTO dto) {
-    return orderService.createOrder(dto);
-}
-// OrderService.java
-public Order createOrder(OrderDTO dto) {
-    Order order = new Order();
-    orderMapper.insert(order);
-    return order;
-}
-```
-
-请输出 6 个部分...
-```
-
-### 示例：期望的 LLM 输出
-
-```
-=== 调用时序 ===
-客户端 POST /api/orders {item_id, quantity}
-  → OrderController.createOrder(OrderDTO)
-    → OrderService.createOrder(OrderDTO)
-      → OrderMapper.insert(Order) — 持久化到 DB
-    → 返回 Order(id=12345, status="CREATED")
-  → 客户端收到 201 Created + Order详情
-```
-
-常见失败模式：
-- 缺少箭头（无 `→`）— 软警告，不阻塞
-- 方法名错误 — 对照 `{CLASS}.{METHOD}` 元数据核实
-- 部分为空 — 写入 `=== 状态: 失败 ===` 标记
-
 ## Step 3 — 解析并构建 JSONL
 
 ```bash
 python scripts/parse_analysis.py --dir output/analyses --groups output/file_groups.json --output output/analysis_results.jsonl [--strict]
 ```
 
-读取所有 `.md` 分析文件，解析 6 部分格式，提取结构化数据，构建 aggregator 所需的 JSONL。
+读取所有 `.md` 分析文件，解析结构化内容，构建 aggregator 所需的 JSONL。
 
 **失败处理：**
 - 标记了 `=== 状态: 失败 ===` 的文件，写为 `success: false` 条目 — aggregator 自动跳过
@@ -370,8 +365,6 @@ python scripts/aggregator.py --results output/analysis_results.jsonl --output ou
 ```
 
 Aggregator 静默跳过 `success: false` 的条目。最终数据模型仅包含成功分析的簇。
-
-**注意**：此步只生成 `final_model.json`，不生成 HTML。HTML 生成在 Step 6（用户确认之后）。
 
 ## Step 5 — 验证（必须）
 
@@ -431,7 +424,7 @@ python scripts/html_assembler.py --model output/final_model.json --output output
 | 规范 | 说明 |
 |------|------|
 | **独立章节** | 每个核心流程独立章节，有清晰的标题和序号 |
-| **Mermaid 图** | 时序图和流程图放在对应章节内，不要放附录 |
+| **Mermaid 图** | 时序图和泳道图放在对应章节内，不要放附录 |
 | **敏感信息脱敏** | 手机号、身份证、密码、密钥等必须用 `***` 替代 |
 | **数据表标注** | 每个流程涉及的数据表需要标注（如 `orders`、`inventory`） |
 | **缓存标注** | 需要标注 DCS/Redis 缓存的读写操作 |
@@ -473,7 +466,7 @@ python scripts/html_assembler.py --model output/final_model.json --output output
 |------|----------|----------|
 | `file_groups.json` 为空或格式错误 | collector.py 运行失败 | 检查 Java 源码路径是否正确；确认 `--mode` 参数有效 |
 | LLM 返回不完整（缺 section） | 模型输出被截断或网络中断 | 该簇标记为失败，重新运行 Step 2c |
-| `=== 调用时序 ===` 无 `→` 箭头 | LLM 格式遵循问题 | 软警告，记录但继续；重分析时可强调格式要求 |
+| Mermaid 语法错误 | LLM 输出格式问题 | 软警告，记录但继续；重分析时可强调格式要求 |
 | 分析文件数量 < 簇数量 | 某些簇元数据校验失败 | 检查 `output/analyses/` 中标记为失败的文件 |
 | verifier 报告规则不匹配 | LLM 幻觉或代码理解错误 | 重新分析对应簇；如持续失败，记录为已知限制 |
 | HTML 生成失败 | `final_model.json` 结构异常 | 检查 aggregator 是否成功运行；查看脚本错误输出 |
@@ -504,15 +497,10 @@ python scripts/aggregator.py --results output/analysis_results.jsonl --output /d
 ## 重要规则
 
 1. **分析结果保存为 `.md` 文件，不是 `.json`。** `parse_analysis.py` 脚本处理 JSON 转换。Markdown 对 LLM 输出更可靠。
-2. **call_chain 格式** — 使用 `→` 箭头和缩进：
-   ```
-   客户端 → Controller.method(param)
-     → Service.method(param) — 说明
-       → Mapper.method(param) — 说明
-     → 返回 Result<Type>
-   ```
+2. **Mermaid 图格式** — 时序图用 `sequenceDiagram` + `autonumber`，泳道图用 `graph TD`。
 3. **不跳过任何簇。** `file_groups.json` 中的每个簇都必须有分析文件。
 4. **簇失败时**，在分析文件中用 `=== 状态: 失败 ===` 标记及错误原因。aggregator 会标记但继续。不要静默跳过。
 5. **始终执行 Step 5（verifier）和 Step 5b（用户确认）。** verifier 后，向用户展示结果并等待确认，方可进入 HTML 组装。
 6. **敏感信息脱敏。** 输出的文档中不得包含真实的手机号、身份证、密码、密钥等信息。
 7. **每个流程独立章节。** Mermaid 图必须放在对应的流程章节内，不要放在附录。
+8. **必须实际读取代码文件**，不能假设或编造数据表、API 路径等信息。
