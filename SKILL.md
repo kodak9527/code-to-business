@@ -7,10 +7,10 @@ description: Transform Java code into business documentation. Use when asked to 
 
 You are executing the code-to-business pipeline. Follow these steps in order.
 
-## Pipeline Overview
+## Pipeline Overview (updated)
 
 ```
-collector.py → [YOU — LLM analysis] → parse_analysis.py → aggregator.py → html_assembler.py
+collector.py → [YOU — LLM analysis] → parse_analysis.py → aggregator.py → verifier.py → [USER REVIEW] → html_assembler.py
 ```
 
 Your job: run the collector, do the LLM analysis using the prompt template, then let the scripts assemble the HTML.
@@ -47,7 +47,21 @@ Assemble the user prompt by replacing placeholders in the template:
 - `{CLASS}.{METHOD}` — from cluster metadata
 - `{CODE_BLOCKS}` — the Java source files, concatenated
 
-### 2b. Call your LLM
+### 2b. Pre-analysis validation（检查点1）
+
+Before calling LLM, verify the cluster is ready:
+
+**Metadata check** — must have all required fields:
+- `http_method`, `http_path`, `entry_class`, `entry_method` present and non-empty
+- If any field is missing → skip this cluster, write `=== 状态: 失败 ===\n缺少必要元数据字段` to the `.md` file
+
+**Code check** — verify Java files exist and are readable:
+- For each path in `files[]`, confirm the file exists and has content (>10 bytes)
+- If file missing → skip cluster, write failure marker with missing file name
+
+Only proceed to 2c if validation passes.
+
+### 2c. Call your LLM
 
 Send system prompt + user prompt to your LLM. It will return 6 sections:
 1. === 业务概述 === (100-200字大白话)
@@ -57,7 +71,23 @@ Send system prompt + user prompt to your LLM. It will return 6 sections:
 5. === 数据模型 === (field descriptions)
 6. === 异常/边界情况 ===
 
-### 2c. Save as markdown
+### 2d. Post-analysis quick check（检查点2）
+
+After LLM returns, verify the output is structurally valid:
+
+**6-section check** — confirm all sections are present:
+- Must contain `=== 业务概述 ===`, `=== 业务流程 ===`, `=== 关键业务规则 ===`, `=== 调用时序 ===`, `=== 数据模型 ===`, `=== 异常/边界情况 ===`
+- If any section header is missing → treat as partial failure, include the marker in the file but note which section is absent
+
+**call_chain format check** — if `=== 调用时序 ===` section is non-empty, verify it contains `→` arrows:
+- If no `→` found → warn in the file that call_chain may be malformed
+- This is a soft check (non-blocking) since we trust LLM to some degree
+
+**Filename check** — verify the cluster_id matches between `file_groups.json` and the output filename.
+
+If checks pass, proceed to save. If failed, write failure marker with reason.
+
+### 2e. Save as markdown
 
 Save the raw LLM output to `output/analyses/<cluster_id>.md` (NOT JSON — we use a parser for reliability).
 
@@ -102,19 +132,38 @@ python scripts/verifier.py --input output/final_model.json
 
 **This step is required.** Skipping it means you may deliver a document with hallucinated rules, missing steps, or incorrect call chains. The verifier catches these by cross-checking against the original code.
 
-If the verifier finds corrections:
-- Review the correction items
-- Re-run analysis for affected clusters (Step 2) with the correction feedback
-- Re-run Step 3–5 until verifier passes
+## Step 5b — User Review (REQUIRED)
 
-## Large Projects (>50 clusters)
+After verifier completes, PRESENT results to the user and WAIT for confirmation:
+
+```
+验证完成：成功 M 个，纠正 K 个
+纠正详情：
+- cluster_id: 字段「规则」描述与代码不符 → 已修正为「xxx」
+- cluster_id: 调用链缺少「库存扣减」步骤 → 已补充
+
+请确认处理方式：
+[A] 接受纠正，继续生成HTML
+[B] 重新分析失败簇（需提供cluster_id列表）
+[C] 放弃本次分析
+```
+
+**DO NOT proceed to Step 6 until user confirms.** If user chooses [B], proceed with re-analysis. If user chooses [C], stop and report partial results.
+
+## Step 6 — Assemble HTML
+
+```bash
+python scripts/html_assembler.py --model output/final_model.json --output output/business_doc.html
+```
+
+## Step 7 — Large Projects (>50 clusters)
 
 For very large projects, consider:
 - Running with `--mode overview` first to get a high-level map, then deep-dive specific modules
 - Noting the failure count in the final report to the user
 - If failure rate > 10%, investigate whether a systematic LLM issue (e.g., unusual code patterns) is the cause
 
-## Report to User
+## Step 8 — Report to User
 
 After completion, tell the user:
 - 分析了 N 个功能簇（成功 M 个，失败 K 个）
@@ -143,4 +192,4 @@ If there were failures, also report:
    LLM returned empty response for call_chain section
    ```
    The aggregator will flag it but continue. Do not silently skip — always write the failure marker.
-5. **Always run Step 5 (verifier).** If verifier finds corrections, re-analyze affected clusters until verifier passes.
+5. **Always run Step 5 (verifier) and Step 5b (user review).** After verifier, present results to user and wait for confirmation before proceeding to HTML assembly.
