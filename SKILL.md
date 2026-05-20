@@ -14,7 +14,17 @@ examples:
 
 # code-to-business — OpenCode Agent Instructions
 
-You are executing the code-to-business pipeline. Follow these steps in order.
+## Script Inventory
+
+| Script | Purpose | Key CLI Signature |
+|--------|---------|-------------------|
+| `scripts/collector.py` | Collect Java files into clusters | `--target <PATH> --mode [deep\|overview] --output <FILE>` |
+| `scripts/parse_analysis.py` | Parse LLM markdown output → JSONL | `--dir <ANALYSES_DIR> --groups <FILE_GROUPS> --output <JSONL>` |
+| `scripts/aggregator.py` | Merge JSONL entries → final_model.json | `--results <JSONL> --output <MODEL_JSON>` |
+| `scripts/verifier.py` | Cross-check analysis against source code | `--results <JSONL> --groups <FILE_GROUPS> --config <CONFIG> --output <VERIFIED_JSONL>` |
+| `scripts/html_assembler.py` | Generate HTML business documentation | `--model <MODEL_JSON> --output <HTML>` |
+
+**Reference file**: `references/prompt_template.md` — system/user prompt templates for LLM analysis.
 
 ## Pre-flight Check（开始前必做）
 
@@ -42,7 +52,7 @@ python -c "import yaml" 2>/dev/null || echo "WARNING: pyyaml not available"
 collector.py → [LLM 分析] → parse_analysis.py → aggregator.py → verifier.py → [用户确认] → html_assembler.py
 ```
 
-你的任务：运行 collector，用 LLM 做 6 部分分析，然后由脚本组装 HTML。
+Each script is documented in the Script Inventory above. Your task：运行 collector，用 LLM 做 6 部分分析，然后由脚本组装 HTML。
 
 ## Step 0 — 初始设置（仅首次）
 
