@@ -1,6 +1,6 @@
 ---
 name: code-to-business
-description: Transform Java code into business documentation. Use when asked to analyze Java projects, generate business docs from code, or explain Java interfaces to non-engineers. Works directly in OpenCode — run collector, use your LLM for the 6-part analysis, then assemble HTML with Mermaid diagrams.
+description: 将 Java 代码转换为业务文档。当被要求分析 Java 项目、从代码生成业务文档，或向非技术人员解释 Java 接口时使用。直接在 OpenCode 中工作 — 运行 collector，用 LLM 做 6 部分分析，然后用脚本组装 HTML 和 Mermaid 图表。
 version: "2.1"
 tags:
   - java
@@ -8,25 +8,25 @@ tags:
   - business-analysis
   - opencode
 examples:
-  - "Analyze this Java project and generate business docs"
-  - "Explain OrderController.java to a non-technical stakeholder"
+  - "分析这个 Java 项目并生成业务文档"
+  - "向非技术背景的干系人解释 OrderController.java"
 ---
 
-# code-to-business — OpenCode Agent Instructions
+# code-to-business — OpenCode Agent 使用说明
 
-## Script Inventory
+## 脚本清单
 
-| Script | Purpose | Key CLI Signature |
+| 脚本 | 用途 | 关键 CLI 签名 |
 |--------|---------|-------------------|
-| `scripts/collector.py` | Collect Java files into clusters | `--target <PATH> --mode [deep\|overview] --output <FILE>` |
-| `scripts/parse_analysis.py` | Parse LLM markdown output → JSONL | `--dir <ANALYSES_DIR> --groups <FILE_GROUPS> --output <JSONL>` |
-| `scripts/aggregator.py` | Merge JSONL entries → final_model.json | `--results <JSONL> --output <MODEL_JSON>` |
-| `scripts/verifier.py` | Cross-check analysis against source code | `--results <JSONL> --groups <FILE_GROUPS> --config <CONFIG> --output <VERIFIED_JSONL>` |
-| `scripts/html_assembler.py` | Generate HTML business documentation | `--model <MODEL_JSON> --output <HTML>` |
+| `scripts/collector.py` | 将 Java 文件收集为簇 | `--target <PATH> --mode [deep\|overview] --output <FILE>` |
+| `scripts/parse_analysis.py` | 解析 LLM markdown 输出 → JSONL | `--dir <ANALYSES_DIR> --groups <FILE_GROUPS> --output <JSONL>` |
+| `scripts/aggregator.py` | 合并 JSONL 条目 → final_model.json | `--results <JSONL> --output <MODEL_JSON>` |
+| `scripts/verifier.py` | 对照源代码交叉检查分析结果 | `--results <JSONL> --groups <FILE_GROUPS> --config <CONFIG> --output <VERIFIED_JSONL>` |
+| `scripts/html_assembler.py` | 生成 HTML 业务文档 | `--model <MODEL_JSON> --output <HTML>` |
 
-**Reference file**: `references/prompt_template.md` — system/user prompt templates for LLM analysis.
+**参考文件**: `references/prompt_template.md` — 用于 LLM 分析的系统提示和用户提示模板。
 
-## Pre-flight Check（开始前必做）
+## 开始前必做
 
 执行任何步骤前，验证所有资源和脚本可用：
 
@@ -46,13 +46,13 @@ python -c "import yaml" 2>/dev/null || echo "WARNING: pyyaml not available"
 
 若任何检查失败，停止并报告缺失资源。
 
-## Pipeline Flow
+## 流程概览
 
 ```
 collector.py → [LLM 分析] → parse_analysis.py → aggregator.py → verifier.py → [用户确认] → html_assembler.py
 ```
 
-Each script is documented in the Script Inventory above. Your task：运行 collector，用 LLM 做 6 部分分析，然后由脚本组装 HTML。
+上述每个脚本的详细说明见上方"脚本清单"。你的任务：运行 collector，用 LLM 做 6 部分分析，然后由脚本组装 HTML。
 
 ## Step 0 — 初始设置（仅首次）
 
