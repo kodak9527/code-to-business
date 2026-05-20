@@ -102,6 +102,70 @@ For projects with many clusters (>20):
 
 **Resume tip:** If a turn ends mid-batch, simply re-run Step 2 — the script checks `output/analyses/` and skips clusters that already have `.md` files.
 
+### Example: Assembling a Prompt
+
+Given this cluster from `file_groups.json`:
+```json
+{
+  "cluster_id": "OrderController.createOrder",
+  "http_method": "POST",
+  "http_path": "/api/orders",
+  "entry_class": "OrderController",
+  "entry_method": "createOrder",
+  "files": ["src/OrderController.java", "src/OrderService.java"]
+}
+```
+
+And these file contents:
+- `OrderController.java` → `public Order createOrder(OrderDTO dto) {...}`
+- `OrderService.java` → `public Order createOrder(OrderDTO dto) { orderMapper.insert(o); ...}`
+
+The assembled prompt replaces:
+- `{HTTP_METHOD} {PATH}` → `POST /api/orders`
+- `{CLASS}.{METHOD}` → `OrderController.createOrder`
+- `{CODE_BLOCKS}` → [concatenated file contents]
+
+Result (truncated):
+```
+分析以下 API 端点：
+
+**端点**: POST /api/orders
+**入口方法**: OrderController.createOrder
+
+**代码**:
+```java
+// OrderController.java
+public Order createOrder(OrderDTO dto) {
+    return orderService.createOrder(dto);
+}
+// OrderService.java
+public Order createOrder(OrderDTO dto) {
+    Order order = new Order();
+    orderMapper.insert(order);
+    return order;
+}
+```
+
+请输出 6 个部分...
+```
+
+### Example: Expected LLM Output (one section)
+
+```
+=== 调用时序 ===
+客户端 POST /api/orders {item_id, quantity}
+  → OrderController.createOrder(OrderDTO)
+    → OrderService.createOrder(OrderDTO)
+      → OrderMapper.insert(Order) — 持久化到 DB
+    → 返回 Order(id=12345, status="CREATED")
+  → 客户端收到 201 Created + Order详情
+```
+
+Common failures to watch for:
+- Missing arrows (no `→`) — soft warn in file, don't block
+- Wrong method names — verify against `{CLASS}.{METHOD}` metadata
+- Empty sections — write `=== 状态: 失败 ===` marker
+
 ## Step 3 — Parse and Build JSONL
 
 ```bash
