@@ -1,506 +1,74 @@
 ---
 name: code-to-business
-description: 电商业务分析 Skill。从代码生成完整业务流图和文档。当用户说"分析电商业务"、"梳理业务流程"、"生成本业务文档"时激活。扫描代码仓库，生成带 Mermaid 时序图/泳道图、异常分支表、数据表映射的业务文档。
-version: "4.0"
+description: 电商业务分析 Skill。从代码生成完整业务流图和文档。支持模块扫描、LLM 自动分析、Mermaid 图表生成及 HTML 报告组装。
+version: "4.1"
 ---
 
 # 电商业务分析 Skill
 
-## 触发条件
+扫描代码仓库，提取业务逻辑，生成带 Mermaid 时序图/泳道图、异常分支表、数据表映射的业务文档。
 
-当用户发送以下指令时激活此 skill：
-- "分析电商业务"
-- "梳理业务流程"
-- "生成本业务文档"
-- "生成 skill 文件"
+## 触发词
+- "分析电商业务"、"梳理业务流程"、"生成业务文档"
 
-## 执行步骤
+## 核心工作流 (8 阶段)
 
-### Step 1: 代码扫描
-
-1. 扫描代码根目录，列出所有微服务模块
-2. 识别每个模块的职责和边界
-3. 标注模块间依赖关系
-
-### Step 2: 业务流分析
-
-对每个核心用户操作进行分析（至少覆盖以下场景）：
-
-| 场景 | 说明 |
-|------|------|
-| 用户浏览车辆列表 | 首页/列表页查询 |
-| 用户查看车辆详情 | 单个商品详情 |
-| 用户提交购车意向 | 留资/咨询 |
-| 用户预约试驾 | 预约到店 |
-| 用户下单 | 创建订单 |
-| 订单支付 | 支付流程 |
-| 订单履约/交付 | 交付完成 |
-
-**每个场景必须输出：**
-
-1. **API 入口**：`请求路径 + 方法 + 功能描述`
-2. **时序图**：使用 Mermaid `sequenceDiagram` 语法
-3. **泳道图**：使用 Mermaid `graph TD` 语法，标注各服务/数据库
-4. **异常分支表**：列出所有错误码和处理逻辑
-5. **数据表映射**：涉及哪些表、哪些字段
-6. **缓存 Key**：涉及的 DCS Key 及过期时间
-
-### Step 3: 特殊业务识别
-
-重点标注：
-- 车辆销售特有流程（与普通商品的区别）
-- 企业客户购车流程
-- 跨微服务调用及服务名
-
-### Step 4: 汇总输出
-
-生成完整的 Markdown 报告，包含：
-- 微服务架构图
-- 每个核心操作的完整流程图
-- 数据字典
-- 待分析其他微服务建议清单
-
-## 格式规范
-
-### 时序图规范
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as 用户
-    participant GW as API网关
-    participant VS as 车辆服务
-    participant DCS as DCS缓存
-    participant DB as 数据库
-
-    U->>GW: 操作描述
-    GW->>VS: API 路径
-    VS->>DCS: 缓存操作
-    VS->>DB: 数据库操作
-    alt 正常流程
-        DB-->>VS: 返回数据
-        VS-->>GW: 成功响应
-    else 异常流程
-        DB-->>VS: 异常
-        VS-->>GW: {code: xxx, msg: "错误信息"}
-    end
-    GW-->>U: 最终响应
-```
-
-### 泳道图规范
-
-```mermaid
-graph TD
-    subgraph API网关
-        A[接收请求]
-    end
-    subgraph 车辆服务
-        B[业务逻辑]
-        C[数据处理]
-    end
-    subgraph DCS缓存
-        D[缓存读写]
-    end
-    subgraph 数据库
-        E[表1]
-        F[表2]
-    end
-
-    A --> B
-    B --> D
-    B --> C
-    C --> E
-    C --> F
-```
-
-### 异常分支表规范
-
-| 异常场景 | 错误码 | 处理逻辑 |
-|----------|--------|----------|
-| 参数校验失败 | 1001 | 返回参数错误提示 |
-| 缓存未命中 | - | 降级查数据库 |
-| 库存不足 | 2001 | 返回库存不足提示 |
-
-### 数据表映射规范
-
-| 数据库表 | 字段 | 类型 | 说明 |
-|----------|------|------|------|
-| vehicle | id | BIGINT | 主键 |
-| vehicle | name | VARCHAR(100) | 车辆名称 |
-
-### 脱敏要求
-
-- 表名和字段名保留实际名称
-- 敏感数据用 `xxx` 替代
-- 错误码和业务规则必须真实反映代码中的实现
-
-## 执行约束
-
-1. **必须实际读取代码文件**，不能假设
-2. 每个核心流程必须有对应的 Mermaid 图
-3. 报告中必须标注代码中实际存在的数据表和 API 路径
-
-## 脚本清单
-
-| 脚本 | 用途 | 关键 CLI 签名 |
-|--------|---------|-------------------|
-| `scripts/collector.py` | 收集 Java 文件，按功能簇分组 | `--target <PATH> --mode [deep\|overview] --output <FILE>` |
-| `scripts/parse_analysis.py` | 解析 LLM markdown 输出 → JSONL | `--dir <ANALYSES_DIR> --groups <FILE_GROUPS> --output <JSONL>` |
-| `scripts/aggregator.py` | 合并 JSONL 条目 → final_model.json | `--results <JSONL> --output <MODEL_JSON>` |
-| `scripts/verifier.py` | 对照源代码交叉检查分析结果 | `--results <JSONL> --groups <FILE_GROUPS> --config <CONFIG> --output <VERIFIED_JSONL>` |
-| `scripts/html_assembler.py` | 生成 HTML 业务文档 | `--model <MODEL_JSON> --output <HTML>` |
-
-**参考文件**: `references/prompt_template.md` — 用于 LLM 分析的系统提示和用户提示模板。
-
-## 开始前必做
-
-执行任何步骤前，验证所有资源和脚本可用：
-
-```bash
-# 验证脚本存在且可执行
-for script in scripts/collector.py scripts/parse_analysis.py scripts/aggregator.py scripts/verifier.py scripts/html_assembler.py; do
-  if [ ! -f "$script" ]; then echo "MISSING: $script"; exit 1; fi
-  if [ ! -r "$script" ]; then echo "UNREADABLE: $script"; exit 1; fi
-done
-
-# 验证 references 存在
-if [ ! -f "references/prompt_template.md" ]; then echo "MISSING: references/prompt_template.md"; exit 1; fi
-
-# 验证 Python 依赖（collector.py 需要 pyyaml）
-python -c "import yaml" 2>/dev/null || echo "WARNING: pyyaml not available"
-```
-
-若任何检查失败，停止并报告缺失资源。
-
-## 流程概览
-
-```
-collector.py → [LLM 分析] → parse_analysis.py → aggregator.py → verifier.py → [用户确认] → html_assembler.py
-```
-
-你的任务：扫描代码仓库，生成带 Mermaid 图的业务文档。
-
-## Step 0 — 初始设置（仅首次）
-
+### Step 0: 初始设置
 ```bash
 mkdir -p output/analyses
 ```
 
-## Step 1 — 模块扫描 + 收集 Java 文件
-
-### 1a. 扫描项目结构
-
-分析项目时，首先识别：
-
-**微服务模块**：查找 `*-service`、`*-api`、`*-web` 等命名模式的模块
-**Service 层**：查找 `*Service.java`、`*ServiceImpl.java`
-**Controller 层**：查找 `*Controller.java`
-**DAO 层**：查找 `*DAO.java`、`*Mapper.java`
-
-### 1b. 收集 Java 文件
-
+### Step 1: 模块扫描与文件收集
+识别微服务边界，将 Controller/Service 按功能簇分组。
 ```bash
 python scripts/collector.py --target <PROJECT_PATH> --mode deep --output output/file_groups.json
 ```
 
-- `--mode deep`：每个 Controller 方法一个簇（推荐）
-- `--mode overview`：每个 Controller 类一个簇
+### Step 2: LLM 业务分析 (核心)
+对每个簇进行分析。**开始前必须阅读 `references/formatting_guidelines.md`。**
+1. 准备 Prompt (见 `references/prompt_template.md`)。
+2. 调用 LLM 生成 API 入口、时序图、泳道图、异常表、数据表映射。
+3. 将输出保存为 `output/analyses/<cluster_id>.md`。
 
-阅读输出，了解有多少个簇待分析。
-
-### 1c. 标记重点模块
-
-在收集结果中，标记以下模块为**重点分析对象**：
-- 车辆销售相关（包含 `Vehicle`、`Car`、`Sales`、`Stock` 等关键词）
-- 企业客户相关（包含 `Enterprise`、`Customer`、`Credit` 等关键词）
-- 支付/订单相关（包含 `Pay`、`Order`、`Payment`、`Trade` 等关键词）
-- 缓存相关（包含 `Cache`、`Redis`、`DCS` 等关键词）
-
-## Step 2 — LLM 分析（核心工作）
-
-阅读 `references/prompt_template.md`，获取系统提示和用户提示模板。
-
-对 `output/file_groups.json` 中的每个簇执行以下子步骤：
-
-### Step 2a — 准备提示
-
-读取簇的 Java 文件（`files[]` 列表）和元数据（`http_method`、`http_path`、`entry_class`、`entry_method`）。
-
-按模板替换占位符：
-- `{HTTP_METHOD} {PATH}` → 如 `POST /api/orders`
-- `{CLASS}.{METHOD}` → 如 `OrderController.createOrder`
-- `{CODE_BLOCKS}` → Java 源文件内容拼接
-
-### Step 2b — 分析前验证（检查点 1）
-
-调用 LLM 前，必须验证：
-
-**元数据检查** — 必须包含全部必填字段：
-- `http_method`、`http_path`、`entry_class`、`entry_method` 均存在且非空
-- 任一字段缺失 → 跳过此簇，文件写入 `=== 状态: 失败 ===\n缺少必要元数据字段`
-
-**代码检查** — 确认 Java 文件存在且可读：
-- 每个 `files[]` 中的路径，确认文件存在且内容 > 10 字节
-- 文件缺失 → 跳过簇，文件写入失败标记及缺失文件名
-
-仅在验证通过后进入 Step 2c。
-
-### Step 2c — 调用 LLM
-
-发送系统提示 + 用户提示。期望返回完整的业务分析内容，包含：
-
-**1. API 入口**
-- 请求路径 + 方法 + 功能描述
-
-**2. 时序图**
-- 使用 Mermaid `sequenceDiagram` 语法
-- 包含 `autonumber`、各参与者、正常/异常分支
-
-**3. 泳道图**
-- 使用 Mermaid `graph TD` 语法
-- 标注各服务/数据库边界
-
-**4. 异常分支表**
-- 列出所有错误码和处理逻辑
-
-**5. 数据表映射**
-- 涉及哪些表、哪些字段
-
-**6. 缓存 Key**
-- 涉及的 DCS/Redis Key 及过期时间
-
-### Step 2d — 分析后检查（检查点 2）
-
-LLM 返回后，验证输出结构：
-
-**完整性检查** — 确认每个部分都存在：
-- API 入口
-- 时序图（Mermaid 代码块）
-- 泳道图（Mermaid 代码块）
-- 异常分支表（表格格式）
-- 数据表映射（表格格式）
-- 缓存 Key（如适用）
-
-**格式检查** — 确认 Mermaid 图语法正确：
-- `sequenceDiagram` 有 `autonumber`
-- `graph TD` 格式正确
-- 表格有表头和分隔线
-
-**失败决策树**：
-
-```
-验证结果
-├── 通过 → 进入 Step 2e
-└── 失败（任一硬检查）
-    ├── 写入 output/analyses/<cluster_id>.md，内容包含：
-    │   "=== 状态: 失败 ===" + 失败原因 + 缺失部分列表
-    └── 继续处理下一簇（不断开流程）
-```
-
-**不因单簇失败而停止整批。** 所有簇处理完毕后，在 Step 3 之前统计失败数。
-
-### Step 2e — 保存为 Markdown
-
-将 LLM 原始输出保存到 `output/analyses/<cluster_id>.md`（不是 JSON）。
-
-文件名必须与 `file_groups.json` 中的 `cluster_id` 匹配。
-
-### Step 2f — 输出质量检查清单（自检）
-
-分析完成后、进入 Step 3 之前，对照以下清单逐项核对：
-
-- [ ] **API 入口** — 路径、方法、功能描述完整吗？
-- [ ] **时序图** — Mermaid 语法正确吗？包含所有参与者吗？
-- [ ] **泳道图** — 服务边界标注清楚吗？
-- [ ] **异常分支表** — 错误码和处理逻辑与代码一致吗？
-- [ ] **数据表映射** — 表名和字段名真实存在吗？
-- [ ] **缓存 Key** — DCS/Redis Key 格式正确吗？
-- [ ] **幻觉检查** — 整个输出中有没有出现代码里不存在的类名、方法名、表名？
-- [ ] **敏感信息检查** — 是否包含密码、密钥、手机号等敏感信息？如有需脱敏
-
-任一硬性问题（如 Mermaid 语法错误、数据表不存在）→ 标记失败并重分析。
-软性问题（如表述不够清晰）→ 记录但不阻塞，可接受但需改进。
-
-### 批量处理 + 断点续传策略
-
-**何时分批**：簇数量 > 20 的项目需要分批处理；≤20 可一轮完成。
-
-**分批操作**：
-```
-第1轮：处理簇 1-10，写入 output/analyses/
-第2轮：处理簇 11-20，写入 output/analyses/
-...持续直到全部完成
-```
-
-**续传逻辑**（最关键的保障）：
-```
-重新运行 Step 2 时，脚本检查 output/analyses/
-  → 已有对应 .md 文件的簇 → 跳过（读取而非重写）
-  → 没有 .md 文件的簇 → 正常分析
-因此：任意时刻中断 → 重新运行 Step 2 → 自动从断点继续，不会重复已成功的簇
-```
-
-**失败簇的续传特殊处理**：
-- 失败簇的 .md 文件也存在于 `output/analyses/`（内容含 `=== 状态: 失败 ===`）
-- 若想重试失败簇 → 必须先手动删除其 .md 文件 → 重新运行 Step 2
-- 不删除直接重跑会被跳过
-
-## Step 3 — 解析并构建 JSONL
-
+### Step 3: 解析并构建 JSONL
 ```bash
-python scripts/parse_analysis.py --dir output/analyses --groups output/file_groups.json --output output/analysis_results.jsonl [--strict]
+python scripts/parse_analysis.py --dir output/analyses --groups output/file_groups.json --output output/analysis_results.jsonl
 ```
 
-读取所有 `.md` 分析文件，解析结构化内容，构建 aggregator 所需的 JSONL。
-
-**失败处理：**
-- 标记了 `=== 状态: 失败 ===` 的文件，写为 `success: false` 条目 — aggregator 自动跳过
-- 若解析因缺少部分而失败，脚本警告具体簇和部分 — 重新运行该簇的分析（Step 2）
-- 加 `--strict` flag 使空部分警告导致非零退出码（适用于 CI）
-
-## Step 4 — 聚合（生成 final_model.json）
-
+### Step 4: 聚合数据模型
 ```bash
 python scripts/aggregator.py --results output/analysis_results.jsonl --output output/final_model.json
 ```
 
-Aggregator 静默跳过 `success: false` 的条目。最终数据模型仅包含成功分析的簇。
-
-## Step 5 — 验证（必须）
-
+### Step 5: 源码交叉验证 (必做)
 ```bash
-python scripts/verifier.py \
-  --results output/analysis_results.jsonl \
-  --groups output/file_groups.json \
-  --config config.yaml \
-  --output output/verified_results.jsonl
+python scripts/verifier.py --results output/analysis_results.jsonl --groups output/file_groups.json --config config.yaml --output output/verified_results.jsonl
 ```
 
-**此步必须执行。** 跳过则可能交付包含臆造规则、缺失步骤或错误调用链的文档。verifier 对每条成功分析进行二次校验，对照原始代码挑错。
+### Step 6: 用户确认
+展示验证结果（修正项、失败项），征得用户同意后进入下一步。
 
-**verifier 输出的统计指标**：
-- `total`：需要校验的条目数
-- `verified`：校验通过（无修正）
-- `corrected`：发现并接受了修正
-- `failed`：校验调用失败（网络错误等）
-- `skipped`：已跳过（失败条目或 dry-run）
-
-## Step 5b — 用户确认（必须）
-
-verifier 完成后，向用户展示结果并等待确认：
-
-```
-验证完成：成功 M 个，纠正 K 个
-纠正详情：
-- cluster_id: 字段「规则」描述与代码不符 → 已修正为「xxx」
-- cluster_id: 调用链缺少「库存扣减」步骤 → 已补充
-
-请确认处理方式：
-[A] 接受纠正，继续生成HTML
-[B] 重新分析失败簇（需提供cluster_id列表）
-[C] 放弃本次分析
-```
-
-**未经用户确认不得进入 Step 6。** 分支处理：
-
-| 用户选择 | 你应该做什么 |
-|---------|-------------|
-| [A] | 进入 Step 6，执行 `html_assembler.py` |
-| [B] | 收集用户提供的 cluster_id 列表，从对应 `.md` 文件删除后重新运行 Step 2c |
-| [C] | 停止，输出 `output/analyses/` 中已有的分析文件位置，告知用户可后续合并 |
-
-**若用户超时无响应，不自动继续。** 等待明确指令。
-
-## Step 6 — 组装 HTML
-
+### Step 7: 组装 HTML 报告
 ```bash
 python scripts/html_assembler.py --model output/final_model.json --output output/business_doc.html
 ```
 
-### 输出规范（重要）
+## 资源导航
 
-生成的 HTML 文档必须满足：
+- **输出格式规范**：详见 `references/formatting_guidelines.md`。
+- **Mermaid 写法参考**：详见 `references/mermaid_recipes.md`。
+- **Prompt 模板**：详见 `references/prompt_template.md`。
+- **执行约束与排错**：详见 `references/troubleshooting.md`。
 
-| 规范 | 说明 |
-|------|------|
-| **独立章节** | 每个核心流程独立章节，有清晰的标题和序号 |
-| **Mermaid 图** | 时序图和泳道图放在对应章节内，不要放附录 |
-| **敏感信息脱敏** | 手机号、身份证、密码、密钥等必须用 `***` 替代 |
-| **数据表标注** | 每个流程涉及的数据表需要标注（如 `orders`、`inventory`） |
-| **缓存标注** | 需要标注 DCS/Redis 缓存的读写操作 |
+## 脚本清单 (CLI 签名)
 
-## Step 7 — 大型项目（>50 簇）
+| 脚本 | 用途 |
+|--------|---------|
+| `collector.py` | 收集 Java 文件，按功能簇分组 |
+| `parse_analysis.py` | 解析 Markdown 分析结果 → JSONL |
+| `aggregator.py` | 合并条目生成最终数据模型 |
+| `verifier.py` | 对照源代码二次校验分析结果 |
+| `html_assembler.py` | 组装生成 HTML 业务文档 |
 
-**推荐的两阶段策略**：
-
-1. **第一阶段 — 全局地图**（用 `--mode overview`）
-   - 快速生成所有簇的高层概览（每个 Controller 一个簇而非每个方法一个簇）
-   - 目的：了解业务模块划分，识别值得深入的区域
-
-2. **第二阶段 — 深度分析**（用 `--mode deep`）
-   - 仅对高价值模块的 Controller 使用 deep 模式
-   - 其他模块用 overview 结果即可，无需全部 deep
-
-**失败率监控**：
-- 失败率 > 10% → 调查系统性原因（不常见代码模式 / LLM 幻觉模式）
-- 在最终报告中注明：分析了 N 个簇，成功 M 个，失败 K 个
-
-## Step 8 — 向用户报告
-
-完成后告知用户：
-- 分析了 N 个功能簇（成功 M 个，失败 K 个）
-- 发现了哪些业务模块
-- 重点分析了哪些模块（车辆销售/企业客户/支付订单/缓存）
-- HTML 文件位置：`output/business_doc.html`
-- 浏览器打开即可查看
-
-若有失败，另报告：
-- 失败的簇列表（cluster_id）
-- 建议用户检查是否接受部分结果，或修复后重跑
-
-## 错误排查与边界情况
-
-### 常见失败场景及应对
-
-| 症状 | 可能原因 | 解决方案 |
-|------|----------|----------|
-| `file_groups.json` 为空或格式错误 | collector.py 运行失败 | 检查 Java 源码路径是否正确；确认 `--mode` 参数有效 |
-| LLM 返回不完整（缺 section） | 模型输出被截断或网络中断 | 该簇标记为失败，重新运行 Step 2c |
-| Mermaid 语法错误 | LLM 输出格式问题 | 软警告，记录但继续；重分析时可强调格式要求 |
-| 分析文件数量 < 簇数量 | 某些簇元数据校验失败 | 检查 `output/analyses/` 中标记为失败的文件 |
-| verifier 报告规则不匹配 | LLM 幻觉或代码理解错误 | 重新分析对应簇；如持续失败，记录为已知限制 |
-| HTML 生成失败 | `final_model.json` 结构异常 | 检查 aggregator 是否成功运行；查看脚本错误输出 |
-
-### 边界条件速查
-
-- **0 个簇**：collector 未找到任何 Controller/Service，提前终止并报告
-- **1 个簇**：正常运行，不影响流程
-- **大量簇（>100）**：分批处理，每批 20-30 个，设置检查点
-- **Java 文件路径含空格**：脚本需用引号包裹路径（已由 collector.py 处理）
-- **LLM 超时**：保存已获取的部分，标记为部分失败
-
-### 调试模式
-
-若问题难定位，使用以下命令获取详细输出：
-
-```bash
-# 单独运行 collector 并查看原始 JSON
-python scripts/collector.py --target <PROJECT_PATH> --mode deep --output /dev/stdout
-
-# 单独测试 parse_analysis
-python scripts/parse_analysis.py --dir output/analyses --groups output/file_groups.json --output /tmp/test.jsonl --verbose
-
-# 检查 aggregator 跳过哪些条目
-python scripts/aggregator.py --results output/analysis_results.jsonl --output /dev/stdout 2>&1 | grep -i skip
-```
-
-## 重要规则
-
-1. **分析结果保存为 `.md` 文件，不是 `.json`。** `parse_analysis.py` 脚本处理 JSON 转换。Markdown 对 LLM 输出更可靠。
-2. **Mermaid 图格式** — 时序图用 `sequenceDiagram` + `autonumber`，泳道图用 `graph TD`。
-3. **不跳过任何簇。** `file_groups.json` 中的每个簇都必须有分析文件。
-4. **簇失败时**，在分析文件中用 `=== 状态: 失败 ===` 标记及错误原因。aggregator 会标记但继续。不要静默跳过。
-5. **始终执行 Step 5（verifier）和 Step 5b（用户确认）。** verifier 后，向用户展示结果并等待确认，方可进入 HTML 组装。
-6. **敏感信息脱敏。** 输出的文档中不得包含真实的手机号、身份证、密码、密钥等信息。
-7. **每个流程独立章节。** Mermaid 图必须放在对应的流程章节内，不要放在附录。
-8. **必须实际读取代码文件**，不能假设或编造数据表、API 路径等信息。
+---
+**注意**：始终遵循 `references/troubleshooting.md` 中的执行约束，确保报告的真实性与准确性。
